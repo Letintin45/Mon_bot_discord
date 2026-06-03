@@ -159,6 +159,26 @@
     </div>
   </div>
 
+  <div class="card">
+        <div class="card-title"><span>🎫</span> Textes des Tickets</div>
+        <div class="form-grid">
+          <div class="form-group"><label>Titre du panel (Menu principal)</label><input type="text" id="ticketPanelTitle" placeholder="🎫 Support"></div>
+          <div class="form-group full"><label>Texte du panel</label><textarea id="ticketPanelDesc" placeholder="Clique sur le bouton pour ouvrir un ticket."></textarea></div>
+          <div class="form-group"><label>Titre dans le ticket (Utilise {numero})</label><input type="text" id="ticketActiveTitle" placeholder="🎫 Ticket #{numero}"></div>
+          <div class="form-group full"><label>Texte dans le ticket (Utilise {user})</label><textarea id="ticketActiveDesc" placeholder="Bienvenue {user} ! L'équipe arrive."></textarea></div>
+        </div>
+        <button class="btn btn-primary" style="margin-top:10px" onclick="saveTicketText()">💾 Sauvegarder Textes Tickets</button>
+      </div>
+
+      <div class="card">
+        <div class="card-title"><span>💡</span> Textes des Suggestions</div>
+        <div class="form-grid">
+          <div class="form-group full"><label>Titre du guide épinglé</label><input type="text" id="suggPanelTitle" placeholder="💡 Salon de Suggestions"></div>
+          <div class="form-group full"><label>Texte du guide (Règles à afficher)</label><textarea id="suggPanelDesc" style="min-height:150px" placeholder="Vos règles ici..."></textarea></div>
+        </div>
+        <button class="btn btn-primary" style="margin-top:10px" onclick="saveSuggText()">💾 Sauvegarder Textes Suggestions</button>
+      </div>
+
   <div id="page-roles" class="page">
     <div class="header"><div><h2>Rôles & Niveaux</h2></div></div>
     <div class="content">

@@ -134,6 +134,13 @@ async function loadCurrentConfig() {
     document.getElementById('rulesTitle').value = currentConfig.rules_title || '';
     document.getElementById('rulesText').value = currentConfig.rules_text || '';
     document.getElementById('ticketMax').value = currentConfig.ticket_max_open || 0;
+    document.getElementById('ticketPanelTitle').value = currentConfig.ticket_panel_title || '';
+    document.getElementById('ticketPanelDesc').value = currentConfig.ticket_panel_desc || '';
+    document.getElementById('ticketActiveTitle').value = currentConfig.ticket_active_title || '';
+    document.getElementById('ticketActiveDesc').value = currentConfig.ticket_active_desc || '';
+    
+    document.getElementById('suggPanelTitle').value = currentConfig.sugg_panel_title || '';
+    document.getElementById('suggPanelDesc').value = currentConfig.sugg_panel_desc || '';
 
     document.getElementById('antiSpamToggle').checked = currentConfig.anti_spam || false;
     renderBannedWords(currentConfig.banned_words || []);
@@ -258,6 +265,26 @@ async function saveChannels() {
   if (!isNaN(maxT)) patch.ticket_max_open = maxT;
   await saveConfig(patch);
   toast('Salons & Limites sauvegardés !');
+}
+
+async function saveTicketText() {
+  const patch = {
+    ticket_panel_title: document.getElementById('ticketPanelTitle').value,
+    ticket_panel_desc: document.getElementById('ticketPanelDesc').value,
+    ticket_active_title: document.getElementById('ticketActiveTitle').value,
+    ticket_active_desc: document.getElementById('ticketActiveDesc').value
+  };
+  await saveConfig(patch);
+  toast('Textes des tickets sauvegardés ! Refaites la commande /config-tickets sur Discord.');
+}
+
+async function saveSuggText() {
+  const patch = {
+    sugg_panel_title: document.getElementById('suggPanelTitle').value,
+    sugg_panel_desc: document.getElementById('suggPanelDesc').value
+  };
+  await saveConfig(patch);
+  toast('Textes des suggestions sauvegardés ! Refaites la commande /config-suggestions sur Discord.');
 }
 
 async function saveAutoRole() {

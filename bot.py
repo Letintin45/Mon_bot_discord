@@ -229,7 +229,13 @@ class TicketOpenerView(discord.ui.View):
         await interaction.response.send_message(f"✅ Ticket ouvert : {tc.mention}", ephemeral=True)
         
         # 4. Message à l'intérieur du ticket avec le numéro
-        embed = discord.Embed(title=f"🎫 Ticket #{ticket_number:04d}", description=f"Bienvenue {interaction.user.mention} !\nL'équipe va vous répondre bientôt.", color=0x0099ff)
+        t_title = gc.get('ticket_active_title') or f"🎫 Ticket #{ticket_number:04d}"
+        t_title = t_title.replace('{numero}', f"{ticket_number:04d}")
+        
+        t_desc = gc.get('ticket_active_desc') or f"Bienvenue {interaction.user.mention} !\nL'équipe va vous répondre bientôt."
+        t_desc = t_desc.replace('{user}', interaction.user.mention)
+        
+        embed = discord.Embed(title=t_title, description=t_desc, color=0x0099ff)
         embed.set_footer(text=f"Créé par {interaction.user}", icon_url=interaction.user.display_avatar.url)
         await tc.send(embed=embed, view=TicketActiveView())
         
@@ -384,21 +390,11 @@ async def on_message(message):
             except: 
                 pass # Si le message a déjà été supprimé manuellement, on ignore
             
-        # Envoi des nouvelles règles (le "guide" qui reste en bas)
-        new_rules_embed = discord.Embed(
-            title="💡 Salon de Suggestions — Admin-Tycoon",
-            description=(
-                "Bienvenue dans le salon des suggestions de **Admin-Tycoon** !\n\n"
-                "Tapez simplement votre idée dans ce salon.\n"
-                "Le bot la transformera automatiquement en suggestion officielle.\n\n"
-                "**Directives :**\n"
-                "• Soyez clair et précis.\n"
-                "• Une seule idée par message.\n"
-                "• Soyez constructifs.\n\n"
-                "*Un fil de discussion sera créé sous chaque suggestion !*"
-            ),
-            color=0xffcc00
-        )
+        s_title = gc.get('sugg_panel_title') or "💡 Salon de Suggestions — Admin-Tycoon"
+        s_desc = gc.get('sugg_panel_desc') or "Bienvenue dans le salon des suggestions de **Admin-Tycoon** !\n\nTapez simplement votre idée dans ce salon.\nLe bot la transformera automatiquement en suggestion officielle.\n\n**Directives :**\n• Soyez clair et précis.\n• Une seule idée par message.\n• Soyez constructifs.\n\n*Un fil de discussion sera créé sous chaque suggestion !*"
+        
+        new_rules_embed = discord.Embed(title=s_title, description=s_desc, color=0xffcc00)
+        
         new_rules_embed.set_footer(text="Admin-Tycoon — Système automatique")
         new_msg = await message.channel.send(embed=new_rules_embed)
         
@@ -678,7 +674,11 @@ async def setup_ticket(interaction: discord.Interaction, categorie: discord.Cate
     if gid not in c: c[gid] = {}
     c[gid]['ticket_category'] = categorie.id; scfg(c)
     target = salon or interaction.channel
-    embed = discord.Embed(title="🎫 Support", description="Clique sur le bouton pour ouvrir un ticket.", color=0x0099ff)
+    
+    t_title = c[gid].get('ticket_panel_title') or "🎫 Support"
+    t_desc = c[gid].get('ticket_panel_desc') or "Clique sur le bouton pour ouvrir un ticket."
+    
+    embed = discord.Embed(title=t_title, description=t_desc, color=0x0099ff)
     await target.send(embed=embed, view=TicketOpenerView())
     await interaction.response.send_message(f"✅ Installé dans {target.mention}", ephemeral=True)
 
@@ -722,23 +722,10 @@ async def config_suggestions(interaction: discord.Interaction, salon: discord.Te
     if gid not in c: c[gid] = {}
     c[gid]['suggestion_channel'] = salon.id
     
-    # 2. Création de l'Embed
-    embed = discord.Embed(
-        title="💡 Salon de Suggestions — Admin-Tycoon",
-        description=(
-            "Bienvenue dans le salon des suggestions de **Admin-Tycoon** !\n\n"
-            "**Comment faire une suggestion ?**\n"
-            "Tapez simplement votre idée dans ce salon.\n"
-            "Le bot la transformera automatiquement en suggestion officielle.\n\n"
-            "**Directives :**\n"
-            "• Soyez clair et précis dans vos explications.\n"
-            "• Une seule idée par message.\n"
-            "• Gardez les suggestions constructives et respectueuses.\n"
-            "• Pensez aux améliorations globales pour Admin-Tycoon.\n\n"
-            "*Un fil de discussion sera créé sous votre suggestion pour en débattre avec les réactions ✅ et ❌ !*"
-        ),
-        color=0xffcc00
-    )
+    s_title = c[gid].get('sugg_panel_title') or "💡 Salon de Suggestions — Admin-Tycoon"
+    s_desc = c[gid].get('sugg_panel_desc') or "Bienvenue dans le salon des suggestions de **Admin-Tycoon** !\n\nTapez simplement votre idée dans ce salon.\nLe bot la transformera automatiquement en suggestion officielle.\n\n**Directives :**\n• Soyez clair et précis.\n• Une seule idée par message.\n• Soyez constructifs.\n\n*Un fil de discussion sera créé sous chaque suggestion !*"
+
+    embed = discord.Embed(title=s_title, description=s_desc, color=0xffcc00)
     embed.set_footer(text="Admin-Tycoon — Système automatique")
     
     # 3. Envoi et sauvegarde de l'ID du message
@@ -1466,8 +1453,14 @@ def update_config(guild_id):
                     'suggestion_channel', 'level_channel', 'ticket_category'}
     ROLE_KEYS = {'auto_role', 'rules_role_id'}
     # Clés texte libre : accepter même si vide (on veut pouvoir effacer)
-    TEXT_KEYS = {'rules_title', 'rules_text', 'welcome_title', 'welcome_message',
-                 'welcome_color', 'leave_message', 'leave_title'}
+    # Clés texte libre : accepter même si vide (on veut pouvoir effacer)
+    TEXT_KEYS = {
+        'rules_title', 'rules_text', 'welcome_title', 'welcome_message',
+        'welcome_color', 'leave_message', 'leave_title',
+        'ticket_panel_title', 'ticket_panel_desc', 
+        'ticket_active_title', 'ticket_active_desc',
+        'sugg_panel_title', 'sugg_panel_desc'
+    }
 
     patch = {}
     for k, v in request.json.items():
