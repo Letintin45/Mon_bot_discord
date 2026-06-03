@@ -1,4 +1,4 @@
-const API = 'https://admin-tycoon-bot.onrender.com/api'; // CHANGER ICI PAR L'URL DISCLOUD QUAND LE BOT SERA HÉBERGÉ
+const API = 'https://admin-tycoon-bot-2spd.onrender.com/api'; // CHANGER ICI PAR L'URL DISCLOUD QUAND LE BOT SERA HÉBERGÉ
 let currentGuild = null;
 let guildChannels = [];
 let guildRoles = [];
