@@ -1209,10 +1209,12 @@ DASHBOARD_PASSWORD = os.getenv('DASHBOARD_PASSWORD', 'admin123')
 def require_auth():
     if request.method == 'OPTIONS':
         return
-    # --- MODIFICATION : On laisse passer UptimeRobot sur /ping ---
+    
+    # --- MODIFICATION : On laisse passer le login ET le ping ---
     if request.path == '/api/login' or request.path == '/ping':
         return
     # -----------------------------------------------------------
+    
     provided_pass = request.headers.get('Authorization')
     if provided_pass != DASHBOARD_PASSWORD:
         return jsonify({'success': False, 'error': 'Non autorisé. Mot de passe invalide.'}), 401
