@@ -77,6 +77,7 @@ async function init() {
       currentGuild = guilds[0].id;
       document.getElementById('botName').textContent = 'Bot connecté ✓';
       document.getElementById('statusDot').classList.remove('offline');
+      document.getElementById('apiUrlDisplay').textContent = API.replace('/api', '');
       await loadGuild();
       
       const active = localStorage.getItem('activeTab') || 'overview';
@@ -85,6 +86,7 @@ async function init() {
   } catch (e) {
     document.getElementById('botName').textContent = 'Hors ligne';
     document.getElementById('statusDot').classList.add('offline');
+    document.getElementById('apiUrlDisplay').textContent = 'API injoignable';
     toast('Impossible de se connecter à l\'API.', 'error');
   }
 }
@@ -125,6 +127,7 @@ async function loadCurrentConfig() {
     document.getElementById('welcomeIgnoreBots').checked = currentConfig.ignore_bots_welcome !== false;
     document.getElementById('welcomeShowInviter').checked = currentConfig.show_inviter !== false;
     document.getElementById('welcomeOnVerification').checked = currentConfig.welcome_after_rules || false;
+    document.getElementById('minAccountAge').value = currentConfig.min_account_age || 0;
 
     document.getElementById('rulesTitle').value = currentConfig.rules_title || '';
     document.getElementById('rulesText').value = currentConfig.rules_text || '';
@@ -211,7 +214,8 @@ async function saveWelcomeConfig() {
     welcome_message: document.getElementById('welcomeMessage').value,
     ignore_bots_welcome: document.getElementById('welcomeIgnoreBots').checked,
     show_inviter: document.getElementById('welcomeShowInviter').checked,
-    welcome_after_rules: document.getElementById('welcomeOnVerification').checked
+    welcome_after_rules: document.getElementById('welcomeOnVerification').checked,
+    min_account_age: parseInt(document.getElementById('minAccountAge').value) || 0
   });
   updatePreview();
   toast('Config Bienvenue sauvegardée !');

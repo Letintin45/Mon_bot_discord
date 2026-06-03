@@ -44,7 +44,7 @@
     </div>
   </nav>
   <div class="sidebar-footer">
-    <div class="bot-status"><div class="status-dot" id="statusDot"></div><div><div style="font-size:12px;font-weight:600" id="botName">Connexion...</div><div style="font-size:11px;color:var(--text-muted)">API locale :5000</div></div></div>
+    <div class="bot-status"><div class="status-dot" id="statusDot"></div><div><div style="font-size:12px;font-weight:600" id="botName">Connexion...</div><div style="font-size:11px;color:var(--text-muted)" id="apiUrlDisplay">Connexion en cours...</div></div></div>
   </div>
 </aside>
 
@@ -282,23 +282,10 @@
 
   <div id="page-invites" class="page">
     <div class="header"><div><h2>Tracker d'Invitations</h2></div></div>
-    <div class="content"><div class="card"><div id="invitesTable">Chargement...</div></div></div>
-  </div>
-
-  <div class="content">
-    <div class="card">
-      <div class="card-title"><span>👥</span> Membres récents (Logs invitations)</div>
-      <table id="joinedMembersTable" style="width:100%; border-collapse: collapse; margin-top:15px;">
-        <thead>
-          <tr><th>Membre (ID)</th><th>Invité par</th><th>Validé ?</th></tr>
-        </thead>
-        <tbody id="joinedMembersBody"></tbody>
-      </table><div id="page-invites" class="page">
-    <div class="header"><div><h2>Tracker d'Invitations</h2></div></div>
     <div class="content">
       <div class="card">
         <div class="card-title"><span>👥</span> Membres récents (Logs invitations)</div>
-        <table id="joinedMembersTable" style="width:100%; border-collapse: collapse; margin-top:15px;">
+        <table style="width:100%; border-collapse: collapse; margin-top:15px;">
           <thead>
             <tr><th>Membre (ID)</th><th>Invité par</th><th>Validé ?</th></tr>
           </thead>
@@ -309,11 +296,6 @@
         <div class="card-title"><span>🏆</span> Classement des invitations</div>
         <div id="invitesTable">Chargement...</div>
       </div>
-    </div>
-  </div>
-    </div>
-    <div class="card">
-      <div id="invitesTable">Chargement...</div>
     </div>
   </div>
 

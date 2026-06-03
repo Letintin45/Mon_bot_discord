@@ -1,7 +1,7 @@
 import discord
 from discord.ext import commands, tasks
 from discord import app_commands
-import os, json, asyncio, random, re
+import os, json, asyncio, random, re, threading
 from datetime import timedelta, datetime, timezone
 from dotenv import load_dotenv
 
@@ -1345,10 +1345,9 @@ async def aide_cmd(interaction: discord.Interaction, categorie: app_commands.Cho
 # ============================================================
 from flask import Flask, request, jsonify
 from flask_cors import CORS
-import threading
 
 app_flask = Flask(__name__)
-CORS(app_flask, origins=['*'])
+CORS(app_flask, origins=['*'], allow_headers=['Content-Type', 'Authorization'])
 
 # 🔐 Récupération du mot de passe
 DASHBOARD_PASSWORD = os.getenv('DASHBOARD_PASSWORD', 'admin123')
@@ -1356,7 +1355,7 @@ DASHBOARD_PASSWORD = os.getenv('DASHBOARD_PASSWORD', 'admin123')
 @app_flask.before_request
 def require_auth():
     if request.method == 'OPTIONS':
-        return
+        return jsonify({}), 200
     
     # --- MODIFICATION : On laisse passer le login ET le ping ---
     if request.path == '/api/login' or request.path == '/ping':
