@@ -1,7 +1,7 @@
 import discord
 from discord.ext import commands, tasks
 from discord import app_commands
-import os, json, asyncio, random, re, threading
+import os, json, asyncio, random, re
 from datetime import timedelta, datetime, timezone
 from dotenv import load_dotenv
 
@@ -354,7 +354,7 @@ async def on_message(message):
             timestamp=discord.utils.utcnow()
         )
         embed.set_author(name=message.author.display_name, icon_url=message.author.display_avatar.url)
-        embed.set_footer(text="ChunkLock Suggestions")
+        embed.set_footer(text="Admin-Tycoon Suggestions")
         
         await message.delete() # On supprime le message brut du joueur
         msg = await message.channel.send(embed=embed)
@@ -1345,9 +1345,10 @@ async def aide_cmd(interaction: discord.Interaction, categorie: app_commands.Cho
 # ============================================================
 from flask import Flask, request, jsonify
 from flask_cors import CORS
+import threading
 
 app_flask = Flask(__name__)
-CORS(app_flask, origins=['*'], allow_headers=['Content-Type', 'Authorization'])
+CORS(app_flask, origins=['*'])
 
 # 🔐 Récupération du mot de passe
 DASHBOARD_PASSWORD = os.getenv('DASHBOARD_PASSWORD', 'admin123')
@@ -1355,7 +1356,7 @@ DASHBOARD_PASSWORD = os.getenv('DASHBOARD_PASSWORD', 'admin123')
 @app_flask.before_request
 def require_auth():
     if request.method == 'OPTIONS':
-        return jsonify({}), 200
+        return
     
     # --- MODIFICATION : On laisse passer le login ET le ping ---
     if request.path == '/api/login' or request.path == '/ping':
