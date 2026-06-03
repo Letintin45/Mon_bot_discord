@@ -538,10 +538,11 @@ async def on_member_join(member):
     if inviter:
         jm = joined_members()
         if gid not in jm: jm[gid] = {}
-        # On sauvegarde TOUT (qui a invité, et si c'est valide ou un faux compte)
+        # On sauvegarde TOUT (qui a invité, si c'est valide, ET l'heure d'arrivée)
         jm[gid][str(member.id)] = {
             'inviter_id': str(inviter.id), 
-            'is_valid': is_valid_invite
+            'is_valid': is_valid_invite,
+            'join_time': datetime.now(timezone.utc).timestamp() # ⏳ Chronomètre lancé !
         }
         sjoined(jm)
         
@@ -568,22 +569,29 @@ async def on_member_join(member):
 
 @bot.event
 async def on_member_remove(member):
-    c = cfg(); gid = str(member.guild.id); gc = c.get(gid, {})
+    c = cfg(); gid = str(member.id) # Gid est redéfini juste en bas, attention
+    gid = str(member.guild.id); gc = c.get(gid, {})
     
     # 1. ANTI-LEAVER : Retirer l'invitation si le membre avait été compté
     jm = joined_members()
     data = jm.get(gid, {}).get(str(member.id))
     
     if data:
-        # On ne retire un point que si l'invitation était valide à la base !
+        # On vérifie si l'invitation était valide à la base
         if isinstance(data, dict) and data.get('is_valid'):
-            inviter_id = data.get('inviter_id')
-            inv_data = inv()
-            if gid in inv_data and inviter_id in inv_data[gid]:
-                inv_data[gid][inviter_id]['count'] = max(0, inv_data[gid][inviter_id]['count'] - 1)
-                sinv(inv_data)
+            join_time = data.get('join_time', 0)
+            now = datetime.now(timezone.utc).timestamp()
+            
+            # S'il a quitté en moins de 24h (86400 secondes), on retire le point !
+            # Sinon, il est resté + de 24h, donc le point est gagné définitivement.
+            if (now - join_time) <= 86400:
+                inviter_id = data.get('inviter_id')
+                inv_data = inv()
+                if gid in inv_data and inviter_id in inv_data[gid]:
+                    inv_data[gid][inviter_id]['count'] = max(0, inv_data[gid][inviter_id]['count'] - 1)
+                    sinv(inv_data)
                 
-        # On supprime la trace du membre qui est parti
+        # On supprime la trace du membre qui est parti pour garder la BDD propre
         if str(member.id) in jm.get(gid, {}):
             del jm[gid][str(member.id)]
             sjoined(jm)
@@ -1041,52 +1049,55 @@ async def resetinvites(interaction: discord.Interaction, membre: discord.Member)
 @bot.tree.command(name="invites", description="Voir les invitations d'un membre.")
 async def invites_cmd(interaction: discord.Interaction, membre: discord.Member = None):
     m = membre or interaction.user
-    inv_data = inv(); user_inv = inv_data.get(str(interaction.guild.id), {}).get(str(m.id), {})
-    stored_count = user_inv.get('count', 0)
+    inv_data = inv()
+    user_inv = inv_data.get(str(interaction.guild.id), {}).get(str(m.id), {})
     
-    try:
-        discord_invites = await interaction.guild.invites()
-        active_count = sum(i.uses for i in discord_invites if i.inviter and i.inviter.id == m.id)
-    except:
-        active_count = stored_count
+    # On lit UNIQUEMENT la base de données (qui gère les réinitialisations)
+    stored_count = user_inv.get('count', 0)
         
     embed = discord.Embed(title=f"📨 Invitations de {m.display_name}", color=0x5865F2)
     embed.set_thumbnail(url=m.display_avatar.url)
-    embed.add_field(name="Invitations actuelles (Discord)", value=f"**{active_count}** 📨")
-    embed.add_field(name="Membres rejoints via lien (Total)", value=f"**{stored_count}** 🎯")
+    embed.add_field(name="Invitations Vérifiées", value=f"**{stored_count}** 🎯")
+    embed.set_footer(text="Système Anti-Leave activé.")
     await interaction.response.send_message(embed=embed)
 
 @bot.tree.command(name="topinvites", description="Top des inviteurs du serveur.")
 async def topinvites(interaction: discord.Interaction):
     await interaction.response.defer()
-    try:
-        discord_invites = await interaction.guild.invites()
-    except:
-        return await interaction.followup.send("❌ Impossible de lire les invitations.", ephemeral=True)
+    
+    # 1. On charge UNIQUEMENT la base de données
+    inv_data = inv()
+    gid = str(interaction.guild.id)
+    server_invites = inv_data.get(gid, {})
         
-    inv_counts = {}
-    for invite in discord_invites:
-        if invite.inviter:
-            inv_counts[invite.inviter.id] = inv_counts.get(invite.inviter.id, 0) + invite.uses
-            
-    # Ajout de ceux dans la BDD
-    inv_data = inv(); gid = str(interaction.guild.id)
-    for uid, d in inv_data.get(gid, {}).items():
-        try: uid_int = int(uid)
-        except: continue
-        if uid_int not in inv_counts: inv_counts[uid_int] = d.get('count', 0)
-        
-    sorted_inv = sorted(inv_counts.items(), key=lambda x: x[1], reverse=True)[:10]
-    medals = ["🥇","🥈","🥉"] + [f"{i}." for i in range(4, 11)]
+    # 2. On trie du plus grand au plus petit score
+    sorted_inv = sorted(server_invites.items(), key=lambda x: x[1].get('count', 0), reverse=True)
+    medals = ["🥇", "🥈", "🥉"] + [f"{i}." for i in range(4, 11)]
     
     embed = discord.Embed(title="📨 Top Inviteurs", color=0x5865F2)
-    if not sorted_inv: embed.description = "Aucune invitation."
-    else:
-        for i, (uid, count) in enumerate(sorted_inv):
-            try:
-                user = await bot.fetch_user(uid)
-                embed.add_field(name=f"{medals[i]} {user.name}", value=f"**{count}** invitations", inline=False)
-            except: pass
+    embed.set_footer(text="Seules les invitations vérifiées sont comptées.")
+    
+    added = 0
+    for uid, data in sorted_inv:
+        count = data.get('count', 0)
+        
+        # On ignore ceux qui ont 0 invitation (comme ça ils disparaissent si on les réinitialise)
+        if count <= 0:
+            continue
+            
+        if added >= 10:
+            break
+            
+        try:
+            user = await bot.fetch_user(int(uid))
+            embed.add_field(name=f"{medals[added]} {user.name}", value=f"**{count}** invitations", inline=False)
+            added += 1
+        except:
+            pass
+            
+    if added == 0:
+        embed.description = "Aucune invitation valide pour le moment."
+
     await interaction.followup.send(embed=embed)
 
 
