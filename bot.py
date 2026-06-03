@@ -1623,6 +1623,7 @@ def run_flask():
     print(f"🌐 Flask démarré sur le port {port}")
     app_flask.run(host='0.0.0.0', port=port, debug=False, threaded=True, use_reloader=False)
 
+
 if __name__ == '__main__':
     threading.Thread(target=run_flask, daemon=True).start()
     bot.run(TOKEN)
