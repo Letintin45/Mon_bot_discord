@@ -56,7 +56,10 @@ function showPage(name, el = null) {
     if (name === 'overview') loadStats();
     if (name === 'warns') loadWarns();
     if (name === 'economy') loadEconomy();
-    if (name === 'invites') loadInvites();
+    if (name === 'invites') { 
+        loadInvites(); 
+        loadJoinedMembers(); 
+    }
     if (name === 'reactionroles') { populateSelects(); loadReactionRoles(); }
     if (name === 'channels' || name === 'roles' || name === 'automod' || name === 'messages' || name === 'create') populateSelects();
     if (name === 'welcome' || name === 'rules') loadCurrentConfig();
@@ -333,6 +336,35 @@ async function sendPoll() {
   if(!channel_id || !question || options.length < 2) return toast('Il faut un salon, une question et 2 options minimum', 'error');
   await fetch(`${API}/create_poll`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({channel_id, question, options})});
   toast('Sondage créé !');
+}
+
+async function loadJoinedMembers() {
+    try {
+        const response = await fetch(`${API}/joined_members/${currentGuild}`);
+        const data = await response.json(); 
+        
+        const tbody = document.getElementById('joinedMembersBody');
+        if (!tbody) return;
+        tbody.innerHTML = ''; // On vide le tableau avant de le remplir
+
+        // On crée une ligne pour chaque membre
+        for (const [memberId, info] of Object.entries(data)) {
+            const row = document.createElement('tr');
+            
+            // Sécurité pour la compatibilité avec tes anciennes sauvegardes
+            const inviterId = typeof info === 'string' ? info : (info.inviter_id || 'Aucun');
+            const isValid = typeof info === 'string' ? true : info.is_valid;
+            
+            row.innerHTML = `
+                <td>${memberId}</td>
+                <td>${inviterId}</td>
+                <td>${isValid ? '✅ Oui' : '⚠️ Faux compte'}</td>
+            `;
+            tbody.appendChild(row);
+        }
+    } catch(e) { 
+        console.error("Erreur chargement membres:", e); 
+    }
 }
 
 // ── DONNEES ──

@@ -38,6 +38,9 @@ def _save(filename, data):
     with open(filepath, 'w', encoding='utf-8') as f:
         json.dump(data, f, indent=2, ensure_ascii=False)
 
+def joined_members(): return _load('joined_members.json', {})
+def sjoined(d): _save('joined_members.json', d)
+
 def cfg():    return _load('config.json', {})
 def scfg(d):  _save('config.json', d)
 def eco():    return _load('economy.json', {})
@@ -391,15 +394,22 @@ async def _send_welcome(member, inviter, invite_code, gc):
 async def on_member_join(member):
     c = cfg(); gid = str(member.guild.id); gc = c.get(gid, {})
     
-    # Condition: Ignorer les bots
+    # 1. Condition: Ignorer les bots
     if member.bot and gc.get('ignore_bots_welcome', True): 
         return
 
+    # 2. ANTI-ALT : Vérification de l'âge du compte
+    min_days = gc.get('min_account_age', 0)
+    account_age = (datetime.now(timezone.utc) - member.created_at).days
+    is_valid_invite = account_age >= min_days
+
+    # 3. Statistiques join
     s = stats()
     if gid not in s: s[gid] = {}
     s[gid]['members_joined'] = s[gid].get('members_joined', 0) + 1
     sstats(s)
 
+    # 4. Autorole
     ar = gc.get('auto_role')
     if ar:
         role = member.guild.get_role(ar)
@@ -407,10 +417,30 @@ async def on_member_join(member):
             try: await member.add_roles(role)
             except: pass
 
+    # 5. Gestion des invitations
     old_snapshot = bot.invites_tracker.get(member.guild.id, {})
     inviter, invite_code = await find_inviter(member.guild, old_snapshot)
 
-    # Mode Sapphire (Attendre l'acceptation des règles)
+    # Sauvegarde du membre pour le suivi
+    if inviter:
+        jm = joined_members()
+        if gid not in jm: jm[gid] = {}
+        # On sauvegarde TOUT (qui a invité, et si c'est valide ou un faux compte)
+        jm[gid][str(member.id)] = {
+            'inviter_id': str(inviter.id), 
+            'is_valid': is_valid_invite
+        }
+        sjoined(jm)
+        
+        # Si c'est un FAUX COMPTE (trop récent), on lui retire tout de suite 
+        # le point que la fonction find_inviter vient de lui donner par défaut.
+        if not is_valid_invite:
+            inv_data = inv()
+            if gid in inv_data and str(inviter.id) in inv_data[gid]:
+                inv_data[gid][str(inviter.id)]['count'] = max(0, inv_data[gid][str(inviter.id)]['count'] - 1)
+                sinv(inv_data)
+
+    # 6. Mode Sapphire (Attente règles)
     if gc.get('welcome_after_rules'):
         pending = _load('pending_welcome.json', {})
         if gid not in pending: pending[gid] = {}
@@ -421,12 +451,31 @@ async def on_member_join(member):
         _save('pending_welcome.json', pending)
         return
 
-    # Sinon, on envoie le message directement
     await _send_welcome(member, inviter, invite_code, gc)
 
 @bot.event
 async def on_member_remove(member):
     c = cfg(); gid = str(member.guild.id); gc = c.get(gid, {})
+    
+    # 1. ANTI-LEAVER : Retirer l'invitation si le membre avait été compté
+    jm = joined_members()
+    data = jm.get(gid, {}).get(str(member.id))
+    
+    if data:
+        # On ne retire un point que si l'invitation était valide à la base !
+        if isinstance(data, dict) and data.get('is_valid'):
+            inviter_id = data.get('inviter_id')
+            inv_data = inv()
+            if gid in inv_data and inviter_id in inv_data[gid]:
+                inv_data[gid][inviter_id]['count'] = max(0, inv_data[gid][inviter_id]['count'] - 1)
+                sinv(inv_data)
+                
+        # On supprime la trace du membre qui est parti
+        if str(member.id) in jm.get(gid, {}):
+            del jm[gid][str(member.id)]
+            sjoined(jm)
+
+    # 2. Log départ
     s = stats()
     if gid not in s: s[gid] = {}
     s[gid]['members_left'] = s[gid].get('members_left', 0) + 1
@@ -436,6 +485,7 @@ async def on_member_remove(member):
     if ch:
         embed = discord.Embed(description=f"👋 **{member}** a quitté le serveur. Il reste {member.guild.member_count} membres.", color=0xff6b6b)
         await ch.send(embed=embed)
+
 
 @bot.event
 async def on_raw_reaction_add(payload):
@@ -1159,11 +1209,18 @@ DASHBOARD_PASSWORD = os.getenv('DASHBOARD_PASSWORD', 'admin123')
 def require_auth():
     if request.method == 'OPTIONS':
         return
-    if request.path == '/api/login':
+    # --- MODIFICATION : On laisse passer UptimeRobot sur /ping ---
+    if request.path == '/api/login' or request.path == '/ping':
         return
+    # -----------------------------------------------------------
     provided_pass = request.headers.get('Authorization')
     if provided_pass != DASHBOARD_PASSWORD:
         return jsonify({'success': False, 'error': 'Non autorisé. Mot de passe invalide.'}), 401
+
+# --- NOUVELLE ROUTE POUR UPTIMEROBOT ---
+@app_flask.route('/ping', methods=['GET'])
+def ping_server():
+    return "OK", 200
 
 @app_flask.route('/api/login', methods=['POST'])
 def api_login():
@@ -1175,7 +1232,14 @@ def api_login():
 @app_flask.route('/api/test/welcome/<guild_id>', methods=['POST'])
 def api_test_welcome(guild_id):
     g = bot.get_guild(int(guild_id))
-    if g and g.owner: asyncio.run_coroutine_threadsafe(send_welcome(g.owner, g, force=True), bot.loop)
+    if g and g.owner:
+        # On charge la configuration du serveur pour la passer à la fonction
+        c = cfg()
+        gc = c.get(str(guild_id), {})
+        
+        # On appelle la bonne fonction _send_welcome avec l'owner du serveur comme test
+        asyncio.run_coroutine_threadsafe(_send_welcome(g.owner, None, None, gc), bot.loop)
+        
     return jsonify({'success': True})
 
 @app_flask.route('/api/test/rules/<guild_id>', methods=['POST'])
@@ -1318,6 +1382,10 @@ def create_discord():
             await guild.create_role(name=name, color=discord.Color(color))
     asyncio.run_coroutine_threadsafe(_create(), bot.loop)
     return jsonify({'success': True})
+
+@app_flask.route('/api/joined_members/<guild_id>', methods=['GET'])
+def get_joined_members(guild_id):
+    return jsonify(joined_members().get(guild_id, {}))
 
 # /!\ TRÈS IMPORTANT : Le host est 0.0.0.0 pour l'hébergement web /!\
 # Tout à la fin de bot.py
