@@ -5,6 +5,16 @@ import os, json, asyncio, random, re
 from datetime import timedelta, datetime, timezone
 from dotenv import load_dotenv
 
+# --- CONFIGURATION DES RÔLES STAFF ---
+ALLOWED_ROLE_IDS = {
+    1507854910505353236, # Remplace par l'ID réel du rôle Propriétaire
+    1507851921174561030, # Remplace par l'ID réel du rôle Administrateur
+    1507852070089134170  # Remplace par l'ID réel du rôle Modérateur
+}
+def is_staff(member):
+    """Vérifie si le membre possède au moins un rôle autorisé."""
+    user_roles = {role.id for role in member.roles}
+    return not user_roles.isdisjoint(ALLOWED_ROLE_IDS)
 # ============================================================
 # 1. INIT ET GESTION DES FICHIERS (Dossier /data)
 # ============================================================
@@ -92,12 +102,30 @@ class TicketActiveView(discord.ui.View):
 
     @discord.ui.button(label="Claim", style=discord.ButtonStyle.primary, custom_id="ticket_claim", emoji="🎟️")
     async def claim(self, interaction: discord.Interaction, button: discord.ui.Button):
+        # --- VÉRIFICATION DE LA PERMISSION ---
+        # On appelle la fonction is_staff que tu as définie tout en haut
+        if not is_staff(interaction.user):
+            return await interaction.response.send_message(
+                "❌ Vous n'avez pas la permission de réclamer ce ticket.", 
+                ephemeral=True
+            )
+        
+        # Si le code passe ici, c'est que l'utilisateur est bien Staff
         await interaction.response.send_message(f"✅ Pris en charge par {interaction.user.mention}")
         button.disabled = True
         await interaction.message.edit(view=self)
 
     @discord.ui.button(label="Close", style=discord.ButtonStyle.secondary, custom_id="ticket_close", emoji="🔒")
     async def close(self, interaction: discord.Interaction, button: discord.ui.Button):
+        # --- VÉRIFICATION DE LA PERMISSION ---
+        # On appelle la fonction is_staff que tu as définie tout en haut
+        if not is_staff(interaction.user):
+            return await interaction.response.send_message(
+                "❌ Vous n'avez pas la permission de fermer ce ticket.", 
+                ephemeral=True
+            )
+
+        # Si le code passe ici, c'est que l'utilisateur est bien Staff
         await interaction.response.defer()
         embed = discord.Embed(title="🔒 Ticket Fermé", description=f"Fermé par {interaction.user.mention}.", color=discord.Color.orange())
         await interaction.channel.send(embed=embed, view=TicketClosedView())
