@@ -340,14 +340,58 @@ async def on_message(message):
         except: pass
         return
 
+    # ── Système de Suggestions ──
     if message.channel.id == gc.get('suggestion_channel'):
-        embed = discord.Embed(title=f"💡 Suggestion de {message.author.display_name}", description=f"{message.content}\n\nRéagissez avec ✅ et ❌ !", color=0xffffff, timestamp=discord.utils.utcnow())
-        embed.set_footer(text=message.author.display_name, icon_url=message.author.display_avatar.url)
-        await message.delete()
+        # On ignore les messages du bot (sinon il supprimerait ses propres messages en boucle)
+        if message.author == bot.user:
+            return
+            
+        # 1. Traitement de la suggestion du joueur
+        embed = discord.Embed(
+            title=f"💡 Suggestion de {message.author.display_name}", 
+            description=f"{message.content}\n\n**Statut :** En attente de vote\n\nRéagissez avec ✅ et ❌ !", 
+            color=0x5865f2,
+            timestamp=discord.utils.utcnow()
+        )
+        embed.set_author(name=message.author.display_name, icon_url=message.author.display_avatar.url)
+        embed.set_footer(text="ChunkLock Suggestions")
+        
+        await message.delete() # On supprime le message brut du joueur
         msg = await message.channel.send(embed=embed)
-        await msg.add_reaction("✅"); await msg.add_reaction("❌")
-        await msg.create_thread(name=f"Discussion — {message.content[:50]}")
-        await bot.process_commands(message)
+        await msg.add_reaction("✅")
+        await msg.add_reaction("❌")
+        await msg.create_thread(name=f"Discussion : {message.content[:30]}...")
+
+        # 2. Rafraîchissement des règles (Suppression de l'ancien + Envoi du nouveau)
+        old_rules_id = gc.get('suggestion_rules_id')
+        if old_rules_id:
+            try:
+                old_msg = await message.channel.fetch_message(old_rules_id)
+                await old_msg.delete()
+            except: 
+                pass # Si le message a déjà été supprimé manuellement, on ignore
+            
+        # Envoi des nouvelles règles (le "guide" qui reste en bas)
+        new_rules_embed = discord.Embed(
+            title="💡 Salon de Suggestions — Admin-Tycoon",
+            description=(
+                "Bienvenue dans le salon des suggestions de **Admin-Tycoon** !\n\n"
+                "Tapez simplement votre idée dans ce salon.\n"
+                "Le bot la transformera automatiquement en suggestion officielle.\n\n"
+                "**Directives :**\n"
+                "• Soyez clair et précis.\n"
+                "• Une seule idée par message.\n"
+                "• Soyez constructifs.\n\n"
+                "*Un fil de discussion sera créé sous chaque suggestion !*"
+            ),
+            color=0xffcc00
+        )
+        new_rules_embed.set_footer(text="Admin-Tycoon — Système automatique")
+        new_msg = await message.channel.send(embed=new_rules_embed)
+        
+        # Sauvegarde du nouvel ID dans la base de données
+        c[gid]['suggestion_rules_id'] = new_msg.id
+        scfg(c)
         return
 
     levels = lvl()
@@ -652,43 +696,41 @@ async def set_modlog(interaction: discord.Interaction, salon: discord.TextChanne
     c[gid]['mod_log_channel'] = salon.id; scfg(c)
     await interaction.response.send_message(f"✅ Logs modération : {salon.mention}", ephemeral=True)
 
-@bot.tree.command(name="config-suggestions", description="Définit le salon des suggestions et envoie les règles.")
+@bot.tree.command(name="config-suggestions", description="Définit le salon des suggestions et envoie le guide.")
 @app_commands.default_permissions(administrator=True)
-async def set_sugg(interaction: discord.Interaction, salon: discord.TextChannel):
-    # 1. Sauvegarde dans la base de données (Supabase)
+async def config_suggestions(interaction: discord.Interaction, salon: discord.TextChannel):
+    # 1. Sauvegarde du salon
     c = cfg(); gid = str(interaction.guild.id)
     if gid not in c: c[gid] = {}
     c[gid]['suggestion_channel'] = salon.id
-    scfg(c)
     
-    # 2. Création du bel Embed d'explication adapté à ChunkLock
+    # 2. Création de l'Embed
     embed = discord.Embed(
-        title="💡 Salon de Suggestions",
+        title="💡 Salon de Suggestions — ChunkLock",
         description=(
             "Bienvenue dans le salon des suggestions de **ChunkLock** !\n\n"
             "**Comment faire une suggestion ?**\n"
-            "Pour garder ce salon propre et organisé, nous utilisons une commande dédiée :\n"
-            "👉 Utilisez simplement la commande `/suggest`\n"
-            "👉 Choisissez la catégorie (**Jeu** ou **Discord**)\n"
-            "👉 Écrivez votre idée et validez !\n\n"
+            "Tapez simplement votre idée dans ce salon.\n"
+            "Le bot la transformera automatiquement en suggestion officielle.\n\n"
             "**Directives :**\n"
             "• Soyez clair et précis dans vos explications.\n"
-            "• Une seule idée par suggestion.\n"
+            "• Une seule idée par message.\n"
             "• Gardez les suggestions constructives et respectueuses.\n"
             "• Pensez aux améliorations globales pour ChunkLock.\n\n"
-            "*Un fil de discussion (thread) sera créé sous chaque suggestion validée pour débattre avec les réactions ✅ et ❌ !*"
+            "*Un fil de discussion sera créé sous votre suggestion pour en débattre avec les réactions ✅ et ❌ !*"
         ),
-        color=0xffcc00 # Un beau jaune/orange
+        color=0xffcc00
     )
-    embed.set_footer(text="L'équipe de ChunkLock")
+    embed.set_footer(text="ChunkLock — Système automatique")
     
-    # 3. Envoi du message dans le salon cible
-    await salon.send(embed=embed)
+    # 3. Envoi et sauvegarde de l'ID du message
+    msg = await salon.send(embed=embed)
+    c[gid]['suggestion_rules_id'] = msg.id  # On sauvegarde l'ID ici
+    scfg(c)
     
-    # 4. Message de confirmation discret pour l'administrateur
-    await interaction.response.send_message(f"✅ Salon configuré sur {salon.mention} et message des règles envoyé !", ephemeral=True)
+    await interaction.response.send_message(f"✅ Salon {salon.mention} configuré !", ephemeral=True)
 
-
+    
 @bot.tree.command(name="config-levelup", description="Salon des annonces de level up.")
 @app_commands.default_permissions(administrator=True)
 async def set_levelchan(interaction: discord.Interaction, salon: discord.TextChannel):
@@ -894,6 +936,22 @@ async def unlock(interaction: discord.Interaction):
 # ============================================================
 # 8. INVITATIONS
 # ============================================================
+@bot.tree.command(name="invitations-reinitialiser", description="Réinitialise les invitations d'un membre à 0.")
+@app_commands.default_permissions(administrator=True)
+async def resetinvites(interaction: discord.Interaction, membre: discord.Member):
+    inv_data = inv()
+    gid = str(interaction.guild.id)
+    uid = str(membre.id)
+    
+    # Vérifie si le serveur et le membre existent dans la base de données
+    if gid in inv_data and uid in inv_data[gid]:
+        # On remet le compteur à 0
+        inv_data[gid][uid]['count'] = 0
+        sinv(inv_data)
+        await interaction.response.send_message(f"✅ Les invitations de {membre.mention} ont été réinitialisées à **0**.", ephemeral=True)
+    else:
+        await interaction.response.send_message(f"ℹ️ {membre.mention} n'a aucune invitation enregistrée dans la base de données.", ephemeral=True)
+
 @bot.tree.command(name="invites", description="Voir les invitations d'un membre.")
 async def invites_cmd(interaction: discord.Interaction, membre: discord.Member = None):
     m = membre or interaction.user
@@ -1121,6 +1179,31 @@ async def giveaway(interaction: discord.Interaction, duree: int, gagnants: int, 
 # ============================================================
 # 12. RAPPELS & UTILITAIRES
 # ============================================================
+@bot.tree.command(name="aide-jeux", description="Affiche le guide des mini-jeux du serveur.")
+async def aide_jeux(interaction: discord.Interaction):
+    embed = discord.Embed(
+        title="🎮 Guide des Mini-Jeux du Serveur",
+        description=(
+            "Bienvenue dans l'espace détente ! Voici comment utiliser les mini-jeux disponibles :\n\n"
+            "🪙 **1. Pile ou Face (`/pile-face`)**\n"
+            "Le grand classique ! Le bot lance une pièce virtuelle en l'air. Vous avez une chance sur deux de tomber sur Pile ou sur Face.\n\n"
+            "🎱 **2. La Boule Magique (`/8ball [question]`)**\n"
+            "Posez une question fermée (oui/non) à notre Boule Magique. Elle vous donnera une réponse aléatoire parmi nos prédictions.\n\n"
+            "🎲 **3. Lancer de Dés (`/roll [vos dés]`)**\n"
+            "Idéal pour les jeux de rôle ! Attachez les chiffres avec la lettre **d** (sans espace).\n"
+            "👉 *Format :* `XdY` (X = nombre de dés, Y = nombre de faces).\n"
+            "• `/roll 1d6` ➔ Lance 1 dé à 6 faces.\n"
+            "• `/roll 2d20` ➔ Lance 2 dés à 20 faces.\n\n"
+            "🎰 **4. Le Casino / Pari (`/parier [montant]`)**\n"
+            "Un véritable Quitte ou Double (50% de chance) :\n"
+            "• 🟢 **Gagné :** Vous remportez 2x votre mise (ex: Pari 100 = Vous récupérez 200).\n"
+            "• 🔴 **Perdu :** La banque garde votre mise.\n"
+            "*À utiliser avec modération !*"
+        ),
+        color=0x5865f2
+    )
+    await interaction.response.send_message(embed=embed)
+
 @bot.tree.command(name="rappel-creer", description="Créer un rappel.")
 async def remind(interaction: discord.Interaction, duree: int, unite: str, texte: str):
     multipliers = {'s': 1, 'min': 60, 'h': 3600, 'j': 86400}
@@ -1238,7 +1321,7 @@ async def aide_cmd(interaction: discord.Interaction, categorie: app_commands.Cho
         "⚙️ Setup": [("`/config-regles`","Règles"),("`/config-tickets`","Tickets"),("`/config-bienvenue`","Bienvenue"),("`/config-depart`","Départ"),("`/config-logs`","Logs global"),("`/config-modlog`","Logs modération"),("`/config-suggestions`","Suggestions"),("`/config-levelup`","Level-up"),("`/config-autorole`","Auto-rôle"),("`/config-levelrole`","Rôle niveau"),("`/config-maxtickets`","Max tickets"),("`/config-antispam`","Anti-spam"),("`/config-banword`","Mot interdit")],
         "🔨 Modération": [("`/ban`","Bannir"),("`/deban`","Débannir"),("`/expulser`","Expulser"),("`/mute`","Rendre muet"),("`/demute`","Démute"),("`/avertir`","Avertir"),("`/infractions-retirer`","Unwarn"),("`/infractions-lister`","Voir warns"),("`/infractions-reinitialiser`","Purger warns"),("`/slowmode`","Slowmode"),("`/lock`","Lock salon"),("`/unlock`","Unlock salon")],
         "💬 Conversations": [("`/purge`","Supprimer des messages")],
-        "📨 Invitations": [("`/invites`","Invitations perso"),("`/topinvites`","Top inviteurs")],
+        "📨 Invitations": [("`/invites`","Invitations perso"),("`/topinvites`","Top inviteurs"),("`/invitations-reinitialiser`","Purger invitations")],
         "💰 Économie": [("`/solde`","Solde"),("`/journalier`","Quotidien"),("`/travail`","Travailler"),("`/déposer`","Déposer"),("`/retirer`","Retirer"),("`/parier`","Parier"),("`/payer`","Donner"),("`/leaderboard`","Top économie")],
         "⭐ Niveaux": [("`/rank`","Niveau"),("`/leveltop`","Top niveaux")],
         "🎮 Fun": [("`/poll`","Sondage"),("`/giveaway`","Giveaway"),("`/rappel-creer`","Rappel"),("`/pile-face`","Pile/Face"),("`/roll`","Dés"),("`/8ball`","Magique")],
