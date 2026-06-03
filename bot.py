@@ -1353,18 +1353,36 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS
 
 app_flask = Flask(__name__)
-CORS(app_flask, origins=['*'], allow_headers=['Content-Type', 'Authorization'])
+
+# ✅ CORS étendu : autorise Netlify + localhost dev
+CORS(app_flask,
+     origins=['https://admin-tycoon-bot.netlify.app', 'http://localhost', 'http://127.0.0.1', '*'],
+     allow_headers=['Content-Type', 'Authorization'],
+     methods=['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+     supports_credentials=False)
 
 # 🔐 Récupération du mot de passe
 DASHBOARD_PASSWORD = os.getenv('DASHBOARD_PASSWORD', 'admin123')
 
+@app_flask.after_request
+def add_cors_headers(response):
+    """Ajoute les headers CORS à CHAQUE réponse, même les erreurs 401/500."""
+    response.headers['Access-Control-Allow-Origin'] = '*'
+    response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
+    response.headers['Access-Control-Allow-Methods'] = 'GET, POST, PUT, DELETE, OPTIONS'
+    return response
+
 @app_flask.before_request
 def require_auth():
+    # ✅ Toujours laisser passer les pre-flight OPTIONS (sinon CORS bloque tout)
     if request.method == 'OPTIONS':
-        return jsonify({}), 200
-    if request.path == '/api/login' or request.path == '/ping':
+        return '', 204
+    # Routes publiques
+    if request.path in ('/api/login', '/ping'):
         return
-    provided_pass = request.headers.get('Authorization')
+    # ✅ Support "Bearer <pass>" ET mot de passe brut (rétro-compat)
+    auth_header = request.headers.get('Authorization', '')
+    provided_pass = auth_header.replace('Bearer ', '').strip()
     if provided_pass != DASHBOARD_PASSWORD:
         return jsonify({'success': False, 'error': 'Non autorisé. Mot de passe invalide.'}), 401
 
@@ -1567,9 +1585,9 @@ def get_joined_members(guild_id):
 # Tout à la fin de bot.py
 def run_flask():
     # Render donne son port via la variable d'environnement 'PORT'
-    port = int(os.environ.get("PORT"
-    , 5000))
-    app_flask.run(host='0.0.0.0', port=port, debug=False)
+    port = int(os.environ.get("PORT", 5000))
+    # ✅ threaded=True : Flask gère plusieurs requêtes simultanées (dashboard + bot)
+    app_flask.run(host='0.0.0.0', port=port, debug=False, threaded=True, use_reloader=False)
 
 if __name__ == '__main__':
     threading.Thread(target=run_flask, daemon=True).start()
