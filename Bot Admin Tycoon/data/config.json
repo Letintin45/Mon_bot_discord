@@ -1,0 +1,22 @@
+{
+  "1507849375567581385": {
+    "show_inviter": true,
+    "ignore_bots_welcome": true,
+    "welcome_after_rules": true,
+    "rules_message_id": 1511681830179307560,
+    "rules_role_id": 1507850671548792944,
+    "welcome_title": "",
+    "welcome_color": "00bfff",
+    "welcome_message": "Bienvenue sur le Serveur\nBienvenue {username} sur {server}! 💻\nGrâce à toi, nous sommes maintenant {count} administrateurs sur le serveur.",
+    "welcome_channel": 1509126287401419000,
+    "rules_title": "",
+    "rules_text": "⚡ RÈGLES DU DATACENTER\nBienvenue sur le serveur officiel ! Pour que notre infrastructure réseau fonctionne de manière optimale et que la communauté reste saine, le respect des directives suivantes est obligatoire. Tout manquement entraînera l'intervention de l'équipe de modération (Avertissement, Mute, Kick ou Ban).\n🛡️ 1. Respect et Bon Comportement\nZéro tolérance haineuse : Le racisme, l'homophobie, le sexisme et toute forme de discours haineux sont strictement interdits.\nPas de harcèlement ni d'intimidation : Le manque de respect, les insultes ciblées, les menaces de mort et l'incitation au suicide entraîneront un bannissement immédiat.\nSujets sensibles : Veuillez éviter d'aborder des sujets polémiques ou sensibles dans les salons publics.\n💻 2. Sécurité Numérique & IRL\nDDoS et Doxing : Les menaces d'attaques DDoS ou le doxing (divulguer les informations privées) dans la vraie vie entraîneront une exclusion définitive.\nProtection des mineurs : Tout contenu ou comportement à caractère sexuel impliquant un mineur ne sera PAS toléré et entraînera un bannissement sans appel.\n🔞 3. Contenu et Profils\nPas de contenu NSFW : Le contenu choquant, pornographique, violent ou lié aux drogues/armes est strictement interdit.\nProfils corrects : Cette règle s'applique également à votre photo de profil, votre bannière, votre statut et votre section « À propos de moi ».\n📢 4. Utilisation des salons\nPas de Spam : Le spam de messages, les majuscules excessives ou le flood nuisent à la lisibilité.\nPublicité interdite : La promotion d'autres serveurs, chaînes ou projets personnels n'est pas autorisée sans accord préalable.\nPseudos lisibles : Votre pseudo doit commencer par une lettre ou un chiffre classique afin que l'on puisse vous mentionner.\n⚖️ 5. Modération et Conditions\nContournement de sanction : Tenter d'échapper à une sanction entraînera une punition deux fois plus sévère.\nContestations : Les discussions sur les sanctions ne se font pas en public. Ouvrez un ticket pour faire appel.\nRègles Discord : Vous acceptez de respecter les Conditions d'Utilisation de Discord.\n🎭 Choix des Rôles\nRéagissez à ce message pour vous assigner vos rôles :\n✅ - @Admin-Sys\n✅ En écrivant dans les salons de ce serveur, vous confirmez avoir lu et accepté ce règlement.",
+    "leave_channel": null,
+    "log_channel": null,
+    "mod_log_channel": null,
+    "suggestion_channel": 1511382273281233000,
+    "level_channel": 1511305432101159200,
+    "ticket_max_open": 10,
+    "ticket_category": 1509126554981109870
+  }
+}

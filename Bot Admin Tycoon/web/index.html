@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Admin Tycoon — Dashboard</title>
+<link rel="stylesheet" href="style.css">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
+</head>
+<body>
+
+<div id="loginOverlay" style="position:fixed;inset:0;background:var(--bg);z-index:99999;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:20px;">
+  <h2 style="font-size:24px;">🔒 Accès Restreint</h2>
+  <p style="color:var(--text-muted)">Entrez le mot de passe pour accéder au panneau de contrôle.</p>
+  <input type="password" id="loginPass" placeholder="Mot de passe..." style="width:250px;text-align:center;font-size:16px;padding:12px;border-radius:8px;border:1px solid var(--border);background:var(--surface2);color:var(--text);">
+  <button class="btn btn-primary" onclick="tryLogin()">Se connecter</button>
+</div>
+
+<aside class="sidebar">
+  <div class="sidebar-logo">
+    <h1>⚡ Admin Tycoon</h1><p>Dashboard v3.0</p>
+  </div>
+  <div class="guild-selector">
+    <select id="guildSelect" onchange="loadGuild()"><option value="">Chargement...</option></select>
+  </div>
+  <nav class="nav">
+    <div class="nav-group"><div class="nav-label">Principal</div>
+      <div class="nav-item active" onclick="showPage('overview', this)"><span class="icon">📊</span> Vue d'ensemble</div>
+    </div>
+    <div class="nav-group"><div class="nav-label">Configuration</div>
+      <div class="nav-item" onclick="showPage('welcome', this)"><span class="icon">👋</span> Bienvenue</div>
+      <div class="nav-item" onclick="showPage('rules', this)"><span class="icon">📜</span> Règles</div>
+      <div class="nav-item" onclick="showPage('channels', this)"><span class="icon">📢</span> Salons & Tickets</div>
+      <div class="nav-item" onclick="showPage('roles', this)"><span class="icon">🎭</span> Rôles & Niveaux</div>
+      <div class="nav-item" onclick="showPage('automod', this)"><span class="icon">🛡️</span> Automod</div>
+      <div class="nav-item" onclick="showPage('reactionroles', this)"><span class="icon">🎟️</span> Reaction Roles</div>
+      <div class="nav-item" onclick="showPage('create', this)"><span class="icon">🏗️</span> Création Discord</div>
+    </div>
+    <div class="nav-group"><div class="nav-label">Données</div>
+      <div class="nav-item" onclick="showPage('invites', this)"><span class="icon">📨</span> Invitations</div>
+      <div class="nav-item" onclick="showPage('warns', this)"><span class="icon">⚠️</span> Avertissements</div>
+      <div class="nav-item" onclick="showPage('economy', this)"><span class="icon">💰</span> Économie</div>
+      <div class="nav-item" onclick="showPage('messages', this)"><span class="icon">📩</span> Envoyer Message</div>
+    </div>
+  </nav>
+  <div class="sidebar-footer">
+    <div class="bot-status"><div class="status-dot" id="statusDot"></div><div><div style="font-size:12px;font-weight:600" id="botName">Connexion...</div><div style="font-size:11px;color:var(--text-muted)">API locale :5000</div></div></div>
+  </div>
+</aside>
+
+<main class="main">
+
+  <div id="page-overview" class="page active">
+    <div class="header">
+      <div><h2>Vue d'ensemble</h2><p>Statistiques globales du serveur</p></div>
+      <button class="btn btn-primary" onclick="refreshAll()">↻ Rafraîchir</button>
+    </div>
+    <div class="content">
+      <div class="stats-grid" id="statsGrid">Chargement...</div>
+    </div>
+  </div>
+
+  <div id="page-welcome" class="page">
+    <div class="header">
+      <div><h2>Message de Bienvenue</h2><p>Personnalise le message affiché à chaque nouveau membre</p></div>
+    </div>
+    <div class="content">
+      <div class="card">
+        <div class="card-title"><span>⚙️</span> Options d'envoi</div>
+        <div class="toggle-row">
+          <div class="toggle-info"><h4>Ignorer les Bots</h4><p>Ne pas envoyer de message quand un bot rejoint.</p></div>
+          <label class="toggle"><input type="checkbox" id="welcomeIgnoreBots" onchange="saveWelcomeConfig()"><span class="toggle-slider"></span></label>
+        </div>
+        <div class="toggle-row">
+          <div class="toggle-info"><h4>Afficher "Invité par"</h4><p>Ajoute le nom de l'inviteur en bas de l'embed.</p></div>
+          <label class="toggle"><input type="checkbox" id="welcomeShowInviter" onchange="saveWelcomeConfig()"><span class="toggle-slider"></span></label>
+        </div>
+        <div class="toggle-row">
+          <div class="toggle-info"><h4>Mode Sapphire (Attendre les Règles)</h4><p>N'envoie le message QUE lorsque le membre a cliqué sur le ✅ des règles.</p></div>
+          <label class="toggle"><input type="checkbox" id="welcomeOnVerification" onchange="saveWelcomeConfig()"><span class="toggle-slider"></span></label>
+        </div>
+      </div>
+      
+      <div class="card">
+        <div class="card-title"><span>✏️</span> Personnalisation</div>
+        <div class="form-grid">
+          <div class="form-group"><label>Titre</label><input type="text" id="welcomeTitle" placeholder="⚡ Bienvenue !"></div>
+          <div class="form-group"><label>Couleur (hex)</label><input type="text" id="welcomeColor" placeholder="00bfff" maxlength="6"></div>
+          <div class="form-group full"><label>Message</label>
+            <textarea id="welcomeMessage" placeholder="Salut {user} ! Tu es notre {count}ème membre ! 🎉"></textarea>
+            <div class="hint">Variables : {user} {username} {server} {count} {inviter} {inviter_invites}</div>
+          </div>
+        </div>
+        <div style="margin-top:20px">
+          <div class="card-title"><span>👁️</span> Aperçu</div>
+          <div class="preview-box" id="welcomePreview">
+            <div class="preview-title" id="previewTitle">⚡ Bienvenue !</div>
+            <div class="preview-desc" id="previewDesc">Salut @NouvelUtilisateur !</div>
+            <div class="preview-footer" id="previewFooter">Invité par @Quelqu'un</div>
+          </div>
+        </div>
+        <div class="btn-group">
+          <button class="btn btn-primary" onclick="saveWelcomeConfig()">💾 Sauvegarder</button>
+          <button class="btn btn-success" onclick="testWelcome()">🧪 Tester en live</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="page-rules" class="page">
+    <div class="header"><div><h2>Règles</h2><p>Personnalise l'embed des règles</p></div></div>
+    <div class="content">
+      <div class="card">
+        <div class="card-title"><span>📜</span> Configuration des règles</div>
+        <div class="form-grid">
+          <div class="form-group"><label>Titre des règles</label><input type="text" id="rulesTitle" placeholder="📜 RÈGLES"></div>
+          <div class="form-group full"><label>Texte des règles</label>
+            <textarea id="rulesText" style="min-height:200px"></textarea>
+          </div>
+        </div>
+        <div class="btn-group">
+          <button class="btn btn-primary" onclick="saveRules()">💾 Sauvegarder</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="page-channels" class="page">
+    <div class="header"><div><h2>Salons & Tickets</h2><p>Définit les salons et les limites</p></div></div>
+    <div class="content">
+      <div class="card">
+        <div class="card-title"><span>📢</span> Attribution des salons</div>
+        <div class="form-grid">
+          <div class="form-group"><label>👋 Salon de bienvenue</label><select id="ch_welcome"></select></div>
+          <div class="form-group"><label>👋 Salon de départ</label><select id="ch_leave"></select></div>
+          <div class="form-group"><label>📋 Salon des logs globaux</label><select id="ch_logs"></select></div>
+          <div class="form-group"><label>🔨 Salon logs modération</label><select id="ch_modlog"></select></div>
+          <div class="form-group"><label>💡 Salon des suggestions</label><select id="ch_suggestions"></select></div>
+          <div class="form-group"><label>⭐ Salon des level-up</label><select id="ch_levels"></select></div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title"><span>🎫</span> Limites des Tickets</div>
+        <div class="form-group">
+            <label>Nombre maximum de tickets ouverts par serveur (0 = illimité)</label>
+            <input type="number" id="ticketMax" min="0" max="100" placeholder="0">
+        </div>
+        <div class="btn-group">
+          <button class="btn btn-primary" onclick="saveChannels()">💾 Sauvegarder tout</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="page-roles" class="page">
+    <div class="header"><div><h2>Rôles & Niveaux</h2></div></div>
+    <div class="content">
+      <div class="card">
+        <div class="card-title"><span>🎭</span> Rôle automatique</div>
+        <div class="form-group"><select id="autoRole"><option value="">Aucun</option></select></div>
+        <button class="btn btn-primary" style="margin-top:10px" onclick="saveAutoRole()">💾 Sauvegarder</button>
+      </div>
+      <div class="card">
+        <div class="card-title"><span>⭐</span> Rôles par niveau</div>
+        <div class="form-grid">
+          <div class="form-group"><label>Niveau requis</label><input type="number" id="levelNum" min="1"></div>
+          <div class="form-group"><label>Rôle</label><select id="levelRole"></select></div>
+        </div>
+        <button class="btn btn-success" style="margin-top:10px" onclick="addLevelRole()">+ Ajouter</button>
+        <div id="levelRolesTable" style="margin-top:20px"></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="page-automod" class="page">
+    <div class="header"><div><h2>Automod</h2></div></div>
+    <div class="content">
+      <div class="card">
+        <div class="toggle-row">
+          <div class="toggle-info"><h4>Anti-Spam</h4><p>Mute automatiquement (5 msg / 5 sec)</p></div>
+          <label class="toggle"><input type="checkbox" id="antiSpamToggle" onchange="saveAutomod()"><span class="toggle-slider"></span></label>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title"><span>🚫</span> Mots interdits</div>
+        <div class="form-grid"><div class="form-group"><input type="text" id="newBannedWord" placeholder="mot interdit..."></div></div>
+        <button class="btn btn-danger" style="margin-top:10px" onclick="addBannedWord()">+ Ajouter</button>
+        <div id="bannedWordsList" style="margin-top:20px; display:flex; flex-wrap:wrap; gap:8px"></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="page-reactionroles" class="page">
+    <div class="header"><div><h2>Reaction Roles</h2><p>Créer des messages à choix multiples</p></div></div>
+    <div class="content">
+      <div class="card">
+        <div class="card-title"><span>🎟️</span> Reaction Roles actifs</div>
+        <div id="rrList">Chargement...</div>
+      </div>
+      <div class="card">
+        <div class="card-title"><span>✨</span> Créer un menu complet</div>
+        <div class="form-grid">
+          <div class="form-group"><label>Salon de destination</label><select id="rrChannel"></select></div>
+          <div class="form-group"><label>Titre de l'embed</label><input type="text" id="rrTitle" placeholder="🎭 Choisis tes rôles"></div>
+          <div class="form-group full"><label>Description</label><input type="text" id="rrDesc" placeholder="Réagis pour obtenir un rôle !"></div>
+        </div>
+        <div id="rrPairsContainer" style="margin-top:16px">
+          <div style="font-size:12px;font-weight:700;text-transform:uppercase;color:var(--text-muted);margin-bottom:10px">Paires Emoji → Rôle</div>
+          <div id="rrPairsList"></div>
+          <button class="btn btn-success" style="margin-top:10px" onclick="addRRPair()">+ Ajouter une paire</button>
+        </div>
+        <button class="btn btn-primary" style="margin-top:20px" onclick="createRRMessage()">🚀 Créer le message</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- CREATION DISCORD -->
+  <div id="page-create" class="page">
+    <div class="header"><div><h2>Création Discord</h2><p>Construis ton serveur directement depuis le panel</p></div></div>
+    <div class="content">
+      
+      <div class="card">
+        <div class="card-title"><span>📁</span> Créer une Catégorie</div>
+        <div class="form-grid">
+          <div class="form-group full"><label>Nom de la catégorie</label><input type="text" id="create_cat_name" placeholder="Ex: 💬 COMMUNAUTÉ"></div>
+        </div>
+        <button class="btn btn-primary" style="margin-top:10px" onclick="createDiscordItem('category')">➕ Créer la Catégorie</button>
+      </div>
+
+      <div class="card">
+        <div class="card-title"><span>💬</span> Créer un Salon Textuel</div>
+        <div class="form-grid">
+          <div class="form-group"><label>Nom du salon</label><input type="text" id="create_ch_name" placeholder="Ex: discussion"></div>
+          <div class="form-group"><label>Dans quelle catégorie ?</label><select id="create_ch_cat"></select></div>
+        </div>
+        <button class="btn btn-primary" style="margin-top:10px" onclick="createDiscordItem('channel')">➕ Créer le Salon</button>
+      </div>
+
+      <div class="card">
+        <div class="card-title"><span>🎭</span> Créer un Rôle</div>
+        <div class="form-grid">
+          <div class="form-group"><label>Nom du rôle</label><input type="text" id="create_role_name" placeholder="Ex: VIP"></div>
+          <div class="form-group"><label>Couleur (Hex)</label><input type="text" id="create_role_color" placeholder="ffcc00"></div>
+        </div>
+        <button class="btn btn-primary" style="margin-top:10px" onclick="createDiscordItem('role')">➕ Créer le Rôle</button>
+      </div>
+      
+    </div>
+  </div>
+
+  <div id="page-messages" class="page">
+    <div class="header"><div><h2>Envoyer un Message</h2><p>Envoie un message, embed ou sondage dans un salon</p></div></div>
+    <div class="content">
+      <div class="card">
+        <div class="card-title"><span>📩</span> Envoyer un Embed</div>
+        <div class="form-grid">
+          <div class="form-group"><label>Salon</label><select id="msg_channel"></select></div>
+          <div class="form-group"><label>Couleur (hex)</label><input type="text" id="msg_color" placeholder="0099ff" maxlength="6"></div>
+          <div class="form-group full"><label>Titre</label><input type="text" id="msg_title" placeholder="Titre..."></div>
+          <div class="form-group full"><label>Description</label><textarea id="msg_desc" placeholder="Ton texte ici..."></textarea></div>
+        </div>
+        <button class="btn btn-primary" style="margin-top:10px" onclick="sendEmbedMessage()">📤 Envoyer</button>
+      </div>
+      <div class="card">
+        <div class="card-title"><span>📊</span> Créer un Sondage</div>
+        <div class="form-grid">
+          <div class="form-group"><label>Salon</label><select id="poll_channel"></select></div>
+          <div class="form-group full"><label>Question</label><input type="text" id="poll_question" placeholder="Ta question ?"></div>
+          <div class="form-group"><label>Option 1</label><input type="text" id="poll_opt1"></div>
+          <div class="form-group"><label>Option 2</label><input type="text" id="poll_opt2"></div>
+          <div class="form-group"><label>Option 3</label><input type="text" id="poll_opt3"></div>
+          <div class="form-group"><label>Option 4</label><input type="text" id="poll_opt4"></div>
+        </div>
+        <button class="btn btn-primary" style="margin-top:10px" onclick="sendPoll()">📤 Lancer le sondage</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="page-invites" class="page">
+    <div class="header"><div><h2>Tracker d'Invitations</h2></div></div>
+    <div class="content"><div class="card"><div id="invitesTable">Chargement...</div></div></div>
+  </div>
+
+  <div id="page-warns" class="page">
+    <div class="header"><div><h2>Avertissements</h2></div></div>
+    <div class="content"><div class="card"><div id="warnsTable">Chargement...</div></div></div>
+  </div>
+
+  <div id="page-economy" class="page">
+    <div class="header"><div><h2>Économie</h2></div></div>
+    <div class="content"><div class="card"><div id="ecoTable">Chargement...</div></div></div>
+  </div>
+
+</main>
+
+<div id="toast"></div>
+
+<script src="script.js"></script>
+</body>
+</html>
