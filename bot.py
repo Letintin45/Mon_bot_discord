@@ -27,8 +27,14 @@ DASHBOARD_PORT = int(os.getenv('DASHBOARD_PORT', '5000'))
 
 # --- CONNEXION SUPABASE ---
 SUPABASE_URL = os.getenv('SUPABASE_URL')
-SUPABASE_KEY = os.getenv('SUPABASE_KEY')
+SUPABASE_KEY = os.getenv('SUPABASE_KEY')  # Doit être la clé SERVICE ROLE (pas anon)
+
+if not SUPABASE_URL or not SUPABASE_KEY:
+    print("❌ FATAL: SUPABASE_URL ou SUPABASE_KEY manquant dans les variables d'environnement !")
+    raise SystemExit(1)
+
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+print(f"✅ Supabase connecté à {SUPABASE_URL[:40]}...")
 
 def _get_pk(table_name):
     """Détermine la colonne clé primaire en fonction de la table"""
@@ -40,37 +46,43 @@ def _load(filename, default):
     table = filename.replace('.json', '')
     try:
         res = supabase.table(table).select("*").execute()
-        
-        # Cas spécial pour les rappels qui sont une simple liste
-        if isinstance(default, list) and table == 'reminders': 
+
+        if not hasattr(res, 'data') or res.data is None:
+            print(f"⚠️ _load({table}) : réponse vide ou nulle")
+            return default
+
+        # Cas spécial pour les rappels (liste)
+        if isinstance(default, list) and table == 'reminders':
             if res.data: return res.data[0]['data']
             return default
-            
-        # Pour tous les autres fichiers (Dictionnaires)
+
+        # Pour tous les autres (dictionnaires guild_id → data)
         result = {}
         pk = _get_pk(table)
         for row in res.data:
-            result[str(row[pk])] = row['data']
+            if pk in row and 'data' in row:
+                result[str(row[pk])] = row['data']
         return result
     except Exception as e:
-        print(f"⚠️ Erreur de chargement Supabase ({table}) : {e}")
+        print(f"❌ Erreur _load Supabase ({table}) : {type(e).__name__}: {e}")
         return default
 
 def _save(filename, data):
     table = filename.replace('.json', '')
     try:
-        # Cas spécial pour les rappels
-        if isinstance(data, list) and table == 'reminders': 
+        # Cas spécial pour les rappels (liste → 1 seule ligne avec id='global')
+        if isinstance(data, list) and table == 'reminders':
             supabase.table(table).upsert({'id': 'global', 'data': data}).execute()
             return
 
-        # Pour tous les autres fichiers (On met à jour ligne par ligne)
         pk = _get_pk(table)
         rows = [{pk: str(key), 'data': val} for key, val in data.items()]
         if rows:
-            supabase.table(table).upsert(rows).execute()
+            # upsert par batch de 50 pour éviter les timeouts
+            for i in range(0, len(rows), 50):
+                supabase.table(table).upsert(rows[i:i+50]).execute()
     except Exception as e:
-        print(f"⚠️ Erreur de sauvegarde Supabase ({table}) : {e}")
+        print(f"❌ Erreur _save Supabase ({table}) : {type(e).__name__}: {e}")
 
 def joined_members(): return _load('joined_members.json', {})
 def sjoined(d): _save('joined_members.json', d)
@@ -1354,19 +1366,19 @@ from flask_cors import CORS
 
 app_flask = Flask(__name__)
 
-# ✅ CORS étendu : autorise Netlify + localhost dev
+# ✅ CORS complet : Netlify + dev local
 CORS(app_flask,
-     origins=['https://admin-tycoon-bot.netlify.app', 'http://localhost', 'http://127.0.0.1', '*'],
-     allow_headers=['Content-Type', 'Authorization'],
-     methods=['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+     resources={r"/*": {"origins": "*"}},
+     allow_headers=["Content-Type", "Authorization"],
+     methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
      supports_credentials=False)
 
-# 🔐 Récupération du mot de passe
+# 🔐 Mot de passe dashboard
 DASHBOARD_PASSWORD = os.getenv('DASHBOARD_PASSWORD', 'admin123')
 
 @app_flask.after_request
-def add_cors_headers(response):
-    """Ajoute les headers CORS à CHAQUE réponse, même les erreurs 401/500."""
+def after_request(response):
+    """Injecte les headers CORS sur TOUTES les réponses (y compris 401/500)."""
     response.headers['Access-Control-Allow-Origin'] = '*'
     response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
     response.headers['Access-Control-Allow-Methods'] = 'GET, POST, PUT, DELETE, OPTIONS'
@@ -1374,25 +1386,41 @@ def add_cors_headers(response):
 
 @app_flask.before_request
 def require_auth():
-    # ✅ Toujours laisser passer les pre-flight OPTIONS (sinon CORS bloque tout)
+    # ✅ Pre-flight CORS : toujours laisser passer
     if request.method == 'OPTIONS':
         return '', 204
     # Routes publiques
-    if request.path in ('/api/login', '/ping'):
+    if request.path in ('/ping', '/api/login', '/api/debug'):
         return
-    # ✅ Support "Bearer <pass>" ET mot de passe brut (rétro-compat)
-    auth_header = request.headers.get('Authorization', '')
-    provided_pass = auth_header.replace('Bearer ', '').strip()
+    # ✅ Accepte le mot de passe brut OU "Bearer <pass>"
+    auth = request.headers.get('Authorization', '')
+    provided_pass = auth.replace('Bearer ', '').strip()
     if provided_pass != DASHBOARD_PASSWORD:
-        return jsonify({'success': False, 'error': 'Non autorisé. Mot de passe invalide.'}), 401
+        return jsonify({'success': False, 'error': 'Non autorisé.'}), 401
 
-# --- NOUVELLE ROUTE POUR UPTIMEROBOT ---
-@app_flask.route('/ping', methods=['GET'])
+# --- PING pour UptimeRobot ---
+@app_flask.route('/ping', methods=['GET', 'OPTIONS'])
 def ping_server():
     return "OK", 200
 
-@app_flask.route('/api/login', methods=['POST'])
+# --- DEBUG : vérifie que Supabase répond ---
+@app_flask.route('/api/debug', methods=['GET'])
+def api_debug():
+    try:
+        res = supabase.table('config').select('guild_id').limit(3).execute()
+        return jsonify({
+            'supabase': 'OK',
+            'rows_config': len(res.data),
+            'sample': [r['guild_id'] for r in res.data],
+            'bot_guilds': [str(g.id) for g in bot.guilds] if bot.is_ready() else [],
+            'password_set': bool(DASHBOARD_PASSWORD and DASHBOARD_PASSWORD != 'admin123')
+        })
+    except Exception as e:
+        return jsonify({'supabase': 'ERREUR', 'detail': str(e)}), 500
+
+@app_flask.route('/api/login', methods=['POST', 'OPTIONS'])
 def api_login():
+    if request.method == 'OPTIONS': return '', 204
     data = request.json or {}
     if data.get('password') == DASHBOARD_PASSWORD:
         return jsonify({'success': True})
@@ -1432,32 +1460,39 @@ def get_config(guild_id): return jsonify(cfg().get(guild_id, {}))
 def update_config(guild_id):
     c = cfg()
     if guild_id not in c: c[guild_id] = {}
-    
-    # Clés qui sont des IDs Discord (doivent être int ou absentes)
+
+    # Clés qui sont des IDs Discord (int obligatoire, ignorer si vide/0)
     CHANNEL_KEYS = {'welcome_channel', 'leave_channel', 'log_channel', 'mod_log_channel',
                     'suggestion_channel', 'level_channel', 'ticket_category'}
     ROLE_KEYS = {'auto_role', 'rules_role_id'}
-    
+    # Clés texte libre : accepter même si vide (on veut pouvoir effacer)
+    TEXT_KEYS = {'rules_title', 'rules_text', 'welcome_title', 'welcome_message',
+                 'welcome_color', 'leave_message', 'leave_title'}
+
     patch = {}
     for k, v in request.json.items():
         if v is None:
-            continue  # Ignorer les None
-        
-        # Pour les clés de channel/role, convertir en int ou ignorer si vide
+            continue
+
         if k in CHANNEL_KEYS or k in ROLE_KEYS:
+            # IDs Discord : seulement si non vide
             if v == '' or v == 0 or v is False:
-                continue  # Ne pas écraser avec une valeur vide
+                continue
             try:
                 patch[k] = int(v)
             except (ValueError, TypeError):
                 continue
+        elif k in TEXT_KEYS:
+            # ✅ Champs texte : accepter même vide (pour pouvoir effacer)
+            patch[k] = str(v)
         elif isinstance(v, str) and v.strip() == '':
-            continue  # Ignorer les strings vides pour tous les champs
+            continue
         else:
             patch[k] = v
-    
+
     c[guild_id].update(patch)
     scfg(c)
+    print(f"✅ Config sauvegardée pour guild {guild_id} : {list(patch.keys())}")
     return jsonify({'success': True, 'config': c[guild_id]})
 
 @app_flask.route('/api/stats/<guild_id>')
@@ -1584,9 +1619,8 @@ def get_joined_members(guild_id):
 # /!\ TRÈS IMPORTANT : Le host est 0.0.0.0 pour l'hébergement web /!\
 # Tout à la fin de bot.py
 def run_flask():
-    # Render donne son port via la variable d'environnement 'PORT'
     port = int(os.environ.get("PORT", 5000))
-    # ✅ threaded=True : Flask gère plusieurs requêtes simultanées (dashboard + bot)
+    print(f"🌐 Flask démarré sur le port {port}")
     app_flask.run(host='0.0.0.0', port=port, debug=False, threaded=True, use_reloader=False)
 
 if __name__ == '__main__':

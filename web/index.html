@@ -53,7 +53,10 @@
   <div id="page-overview" class="page active">
     <div class="header">
       <div><h2>Vue d'ensemble</h2><p>Statistiques globales du serveur</p></div>
-      <button class="btn btn-primary" onclick="refreshAll()">↻ Rafraîchir</button>
+      <div style="display:flex;gap:10px;">
+        <button class="btn btn-success" onclick="checkApi()" title="Vérifie la connexion Supabase">🔍 Diagnostic</button>
+        <button class="btn btn-primary" onclick="refreshAll()">↻ Rafraîchir</button>
+      </div>
     </div>
     <div class="content">
       <div class="stats-grid" id="statsGrid">Chargement...</div>
