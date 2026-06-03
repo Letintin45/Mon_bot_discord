@@ -354,7 +354,7 @@ async def on_message(message):
             timestamp=discord.utils.utcnow()
         )
         embed.set_author(name=message.author.display_name, icon_url=message.author.display_avatar.url)
-        embed.set_footer(text="Admin-Tycoon Suggestions")
+        embed.set_footer(text="ChunkLock Suggestions")
         
         await message.delete() # On supprime le message brut du joueur
         msg = await message.channel.send(embed=embed)
@@ -454,7 +454,12 @@ async def _send_welcome(member, inviter, invite_code, gc):
             .replace('{inviter}', inviter.mention if inviter else 'Inconnu') \
             .replace('{inviter_invites}', str(inviter_invites)) # <-- VARIABLE AJOUTÉE ICI
             
-        embed = discord.Embed(title=gc.get('welcome_title', '⚡ Bienvenue !'), description=desc, color=int(gc.get('welcome_color', '00bfff').replace('#',''), 16))
+        raw_color = gc.get('welcome_color', '00bfff').lstrip('#') or '00bfff'
+        try:
+            embed_color = int(raw_color, 16)
+        except ValueError:
+            embed_color = 0x00bfff
+        embed = discord.Embed(title=gc.get('welcome_title', '⚡ Bienvenue !'), description=desc, color=embed_color)
     else:
         embed = discord.Embed(title="⚡ Bienvenue !", description=f"Salut {member.mention} ! Tu es notre **{hc}ème** membre ! 🎉", color=0x00bfff)
         
@@ -1413,7 +1418,9 @@ def get_config(guild_id): return jsonify(cfg().get(guild_id, {}))
 def update_config(guild_id):
     c = cfg()
     if guild_id not in c: c[guild_id] = {}
-    c[guild_id].update(request.json); scfg(c)
+    # On filtre les None pour ne pas écraser des valeurs existantes
+    patch = {k: v for k, v in request.json.items() if v is not None}
+    c[guild_id].update(patch); scfg(c)
     return jsonify({'success': True, 'config': c[guild_id]})
 
 @app_flask.route('/api/stats/<guild_id>')

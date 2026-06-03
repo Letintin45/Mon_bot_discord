@@ -77,7 +77,6 @@ async function init() {
       currentGuild = guilds[0].id;
       document.getElementById('botName').textContent = 'Bot connecté ✓';
       document.getElementById('statusDot').classList.remove('offline');
-      document.getElementById('apiUrlDisplay').textContent = API.replace('/api', '');
       await loadGuild();
       
       const active = localStorage.getItem('activeTab') || 'overview';
@@ -86,7 +85,6 @@ async function init() {
   } catch (e) {
     document.getElementById('botName').textContent = 'Hors ligne';
     document.getElementById('statusDot').classList.add('offline');
-    document.getElementById('apiUrlDisplay').textContent = 'API injoignable';
     toast('Impossible de se connecter à l\'API.', 'error');
   }
 }
@@ -127,7 +125,6 @@ async function loadCurrentConfig() {
     document.getElementById('welcomeIgnoreBots').checked = currentConfig.ignore_bots_welcome !== false;
     document.getElementById('welcomeShowInviter').checked = currentConfig.show_inviter !== false;
     document.getElementById('welcomeOnVerification').checked = currentConfig.welcome_after_rules || false;
-    document.getElementById('minAccountAge').value = currentConfig.min_account_age || 0;
 
     document.getElementById('rulesTitle').value = currentConfig.rules_title || '';
     document.getElementById('rulesText').value = currentConfig.rules_text || '';
@@ -150,8 +147,8 @@ async function populateSelects() {
     guildRoles = await rRes.json();
     const guildCats = await catRes.json();
 
-    const chOpt = (id) => `<option value="">Aucun</option>` + guildChannels.map(c => `<option value="${c.id}" ${currentConfig[id] == c.id ? 'selected' : ''}>#${c.name}</option>`).join('');
-    const rOpt = (id) => `<option value="">Aucun</option>` + guildRoles.map(r => `<option value="${r.id}" ${currentConfig[id] == r.id ? 'selected' : ''}>${r.name}</option>`).join('');
+    const chOpt = (id) => `<option value="">Aucun</option>` + guildChannels.map(c => `<option value="${c.id}" ${String(currentConfig[id]) === String(c.id) ? 'selected' : ''}>#${c.name}</option>`).join('');
+    const rOpt = (id) => `<option value="">Aucun</option>` + guildRoles.map(r => `<option value="${r.id}" ${String(currentConfig[id]) === String(r.id) ? 'selected' : ''}>${r.name}</option>`).join('');
     const catOpt = `<option value="">Aucune catégorie</option>` + guildCats.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
 
     document.getElementById('ch_welcome').innerHTML = chOpt('welcome_channel');
@@ -214,8 +211,7 @@ async function saveWelcomeConfig() {
     welcome_message: document.getElementById('welcomeMessage').value,
     ignore_bots_welcome: document.getElementById('welcomeIgnoreBots').checked,
     show_inviter: document.getElementById('welcomeShowInviter').checked,
-    welcome_after_rules: document.getElementById('welcomeOnVerification').checked,
-    min_account_age: parseInt(document.getElementById('minAccountAge').value) || 0
+    welcome_after_rules: document.getElementById('welcomeOnVerification').checked
   });
   updatePreview();
   toast('Config Bienvenue sauvegardée !');
@@ -231,19 +227,29 @@ async function saveRules() {
 }
 
 async function saveChannels() {
-  await saveConfig({
-    welcome_channel: parseInt(document.getElementById('ch_welcome').value) || null,
-    leave_channel: parseInt(document.getElementById('ch_leave').value) || null,
-    log_channel: parseInt(document.getElementById('ch_logs').value) || null,
-    mod_log_channel: parseInt(document.getElementById('ch_modlog').value) || null,
-    suggestion_channel: parseInt(document.getElementById('ch_suggestions').value) || null,
-    level_channel: parseInt(document.getElementById('ch_levels').value) || null,
-    ticket_max_open: parseInt(document.getElementById('ticketMax').value) || 0
-  });
+  const patch = {};
+  const fields = {
+    welcome_channel:    document.getElementById('ch_welcome').value,
+    leave_channel:      document.getElementById('ch_leave').value,
+    log_channel:        document.getElementById('ch_logs').value,
+    mod_log_channel:    document.getElementById('ch_modlog').value,
+    suggestion_channel: document.getElementById('ch_suggestions').value,
+    level_channel:      document.getElementById('ch_levels').value,
+  };
+  for (const [key, val] of Object.entries(fields)) {
+    if (val) patch[key] = parseInt(val);      // seulement si un salon est sélectionné
+  }
+  const maxT = parseInt(document.getElementById('ticketMax').value);
+  patch.ticket_max_open = isNaN(maxT) ? 0 : maxT;
+  await saveConfig(patch);
   toast('Salons & Limites sauvegardés !');
 }
 
-async function saveAutoRole() { await saveConfig({ auto_role: parseInt(document.getElementById('autoRole').value) || null }); toast('Auto-rôle ok !'); }
+async function saveAutoRole() {
+  const val = document.getElementById('autoRole').value;
+  if (val) await saveConfig({ auto_role: parseInt(val) });
+  toast('Auto-rôle ok !');
+}
 
 function renderLevelRoles() {
   const lr = currentConfig.level_roles || {};
@@ -405,8 +411,10 @@ async function loadEconomy() {
 
 async function saveConfig(d) {
   try {
-    currentConfig = { ...currentConfig, ...d };
-    await fetch(`${API}/config/${currentGuild}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(d) });
+    const res = await fetch(`${API}/config/${currentGuild}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(d) });
+    const json = await res.json();
+    if (json.config) currentConfig = json.config; // source de vérité = ce que Supabase a réellement
+    else currentConfig = { ...currentConfig, ...d };
   } catch(e) { toast('Erreur API', 'error'); }
 }
 
