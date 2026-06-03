@@ -359,6 +359,28 @@ async def on_message(message):
         except: pass
         return
 
+    # ── Système Anti-Mots Interdits ──
+    # On évite de censurer les Administrateurs
+    if not message.author.guild_permissions.administrator:
+        c = cfg()
+        gid = str(message.guild.id)
+        if gid in c and 'banned_words' in c[gid]:
+            banned_words = c[gid]['banned_words']
+            
+            # Nettoie le message (enlève les points, virgules, etc.) pour éviter de rater "mot!" ou "mot..."
+            import re
+            msg_clean = re.sub(r'[^\w\s]', '', message.content.lower())
+            msg_words = msg_clean.split()
+            
+            # Vérifie si un des mots du joueur est dans la liste rouge
+            if any(word in banned_words for word in msg_words):
+                try:
+                    await message.delete() # Supprime le message
+                    warn_msg = await message.channel.send(f"⚠️ {message.author.mention}, ton message a été supprimé car il contenait un mot interdit !", delete_after=5)
+                    return # On arrête la lecture du message ici
+                except Exception as e:
+                    print(f"Erreur Automod : {e}")
+
     # ── Système de Suggestions ──
     if message.channel.id == gc.get('suggestion_channel'):
         # On ignore les messages du bot (sinon il supprimerait ses propres messages en boucle)
@@ -394,7 +416,7 @@ async def on_message(message):
         s_desc = gc.get('sugg_panel_desc') or "Bienvenue dans le salon des suggestions de **Admin-Tycoon** !\n\nTapez simplement votre idée dans ce salon.\nLe bot la transformera automatiquement en suggestion officielle.\n\n**Directives :**\n• Soyez clair et précis.\n• Une seule idée par message.\n• Soyez constructifs.\n\n*Un fil de discussion sera créé sous chaque suggestion !*"
         
         new_rules_embed = discord.Embed(title=s_title, description=s_desc, color=0xffcc00)
-        
+
         new_rules_embed.set_footer(text="Admin-Tycoon — Système automatique")
         new_msg = await message.channel.send(embed=new_rules_embed)
         
@@ -713,6 +735,65 @@ async def set_modlog(interaction: discord.Interaction, salon: discord.TextChanne
     if gid not in c: c[gid] = {}
     c[gid]['mod_log_channel'] = salon.id; scfg(c)
     await interaction.response.send_message(f"✅ Logs modération : {salon.mention}", ephemeral=True)
+
+@bot.tree.command(name="config-mot-interdit", description="Gérer la liste des mots interdits (Automod).")
+@app_commands.choices(action=[
+    app_commands.Choice(name="➕ Ajouter un mot", value="add"),
+    app_commands.Choice(name="➖ Retirer un mot", value="remove"),
+    app_commands.Choice(name="📜 Voir la liste", value="list"),
+    app_commands.Choice(name="🚨 Ajouter la liste par défaut (Insultes FR)", value="default")
+])
+@app_commands.default_permissions(administrator=True)
+async def config_mot_interdit(interaction: discord.Interaction, action: app_commands.Choice[str], mot: str = None):
+    c = cfg(); gid = str(interaction.guild.id)
+    if gid not in c: c[gid] = {}
+    if 'banned_words' not in c[gid]: c[gid]['banned_words'] = []
+    
+    words = c[gid]['banned_words']
+    
+    # Action : Liste par défaut
+    if action.value == "default":
+        mots_base = [
+            "putain", "merde", "connard", "connasse", "salope", "salop", "enculé", "encule", 
+            "batard", "bâtard", "fdp", "tg", "ntm", "bite", "couille", "pute", 
+            "pd", "trouduc", "bouffon", "chier", "conne"
+        ]
+        ajoutes = 0
+        for m in mots_base:
+            if m not in words:
+                words.append(m)
+                ajoutes += 1
+        scfg(c)
+        return await interaction.response.send_message(f"✅ **{ajoutes} mots par défaut** ont été ajoutés à la liste d'interdiction du serveur.", ephemeral=True)
+
+    # Action : Voir la liste
+    elif action.value == "list":
+        if not words:
+            return await interaction.response.send_message("ℹ️ Aucun mot interdit n'est configuré.", ephemeral=True)
+        return await interaction.response.send_message(f"📜 **Mots interdits ({len(words)}) :**\n`{', '.join(words)}`", ephemeral=True)
+
+    # Sécurité pour Add/Remove
+    if not mot:
+        return await interaction.response.send_message("❌ Tu dois préciser le champ `mot` pour cette action !", ephemeral=True)
+    
+    mot = mot.lower().strip()
+
+    # Action : Ajouter
+    if action.value == "add":
+        if mot in words:
+            return await interaction.response.send_message(f"⚠️ Le mot `{mot}` est déjà interdit.", ephemeral=True)
+        words.append(mot)
+        scfg(c)
+        await interaction.response.send_message(f"✅ Le mot `{mot}` a été ajouté.", ephemeral=True)
+        
+    # Action : Retirer
+    elif action.value == "remove":
+        if mot in words:
+            words.remove(mot)
+            scfg(c)
+            await interaction.response.send_message(f"✅ Le mot `{mot}` a été retiré.", ephemeral=True)
+        else:
+            await interaction.response.send_message(f"⚠️ Le mot `{mot}` n'est pas dans la liste.", ephemeral=True)
 
 @bot.tree.command(name="config-suggestions", description="Définit le salon des suggestions et envoie le guide.")
 @app_commands.default_permissions(administrator=True)
