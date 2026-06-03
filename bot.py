@@ -1,7 +1,7 @@
 import discord
 from discord.ext import commands, tasks
 from discord import app_commands
-import os, json, asyncio, random, re
+import os, json, asyncio, random, re, threading
 from datetime import timedelta, datetime, timezone
 from dotenv import load_dotenv
 
@@ -66,8 +66,9 @@ def _save(filename, data):
 
         # Pour tous les autres fichiers (On met à jour ligne par ligne)
         pk = _get_pk(table)
-        for key, val in data.items():
-            supabase.table(table).upsert({pk: str(key), 'data': val}).execute()
+        rows = [{pk: str(key), 'data': val} for key, val in data.items()]
+        if rows:
+            supabase.table(table).upsert(rows).execute()
     except Exception as e:
         print(f"⚠️ Erreur de sauvegarde Supabase ({table}) : {e}")
 
@@ -354,7 +355,7 @@ async def on_message(message):
             timestamp=discord.utils.utcnow()
         )
         embed.set_author(name=message.author.display_name, icon_url=message.author.display_avatar.url)
-        embed.set_footer(text="ChunkLock Suggestions")
+        embed.set_footer(text="Admin-Tycoon Suggestions")
         
         await message.delete() # On supprime le message brut du joueur
         msg = await message.channel.send(embed=embed)
@@ -711,9 +712,9 @@ async def config_suggestions(interaction: discord.Interaction, salon: discord.Te
     
     # 2. Création de l'Embed
     embed = discord.Embed(
-        title="💡 Salon de Suggestions — ChunkLock",
+        title="💡 Salon de Suggestions — Admin-Tycoon",
         description=(
-            "Bienvenue dans le salon des suggestions de **ChunkLock** !\n\n"
+            "Bienvenue dans le salon des suggestions de **Admin-Tycoon** !\n\n"
             "**Comment faire une suggestion ?**\n"
             "Tapez simplement votre idée dans ce salon.\n"
             "Le bot la transformera automatiquement en suggestion officielle.\n\n"
@@ -721,12 +722,12 @@ async def config_suggestions(interaction: discord.Interaction, salon: discord.Te
             "• Soyez clair et précis dans vos explications.\n"
             "• Une seule idée par message.\n"
             "• Gardez les suggestions constructives et respectueuses.\n"
-            "• Pensez aux améliorations globales pour ChunkLock.\n\n"
+            "• Pensez aux améliorations globales pour Admin-Tycoon.\n\n"
             "*Un fil de discussion sera créé sous votre suggestion pour en débattre avec les réactions ✅ et ❌ !*"
         ),
         color=0xffcc00
     )
-    embed.set_footer(text="ChunkLock — Système automatique")
+    embed.set_footer(text="Admin-Tycoon — Système automatique")
     
     # 3. Envoi et sauvegarde de l'ID du message
     msg = await salon.send(embed=embed)
@@ -1350,10 +1351,9 @@ async def aide_cmd(interaction: discord.Interaction, categorie: app_commands.Cho
 # ============================================================
 from flask import Flask, request, jsonify
 from flask_cors import CORS
-import threading
 
 app_flask = Flask(__name__)
-CORS(app_flask, origins=['*'])
+CORS(app_flask, origins=['*'], allow_headers=['Content-Type', 'Authorization'])
 
 # 🔐 Récupération du mot de passe
 DASHBOARD_PASSWORD = os.getenv('DASHBOARD_PASSWORD', 'admin123')
@@ -1361,13 +1361,9 @@ DASHBOARD_PASSWORD = os.getenv('DASHBOARD_PASSWORD', 'admin123')
 @app_flask.before_request
 def require_auth():
     if request.method == 'OPTIONS':
-        return
-    
-    # --- MODIFICATION : On laisse passer le login ET le ping ---
+        return jsonify({}), 200
     if request.path == '/api/login' or request.path == '/ping':
         return
-    # -----------------------------------------------------------
-    
     provided_pass = request.headers.get('Authorization')
     if provided_pass != DASHBOARD_PASSWORD:
         return jsonify({'success': False, 'error': 'Non autorisé. Mot de passe invalide.'}), 401
@@ -1418,9 +1414,32 @@ def get_config(guild_id): return jsonify(cfg().get(guild_id, {}))
 def update_config(guild_id):
     c = cfg()
     if guild_id not in c: c[guild_id] = {}
-    # On filtre les None pour ne pas écraser des valeurs existantes
-    patch = {k: v for k, v in request.json.items() if v is not None}
-    c[guild_id].update(patch); scfg(c)
+    
+    # Clés qui sont des IDs Discord (doivent être int ou absentes)
+    CHANNEL_KEYS = {'welcome_channel', 'leave_channel', 'log_channel', 'mod_log_channel',
+                    'suggestion_channel', 'level_channel', 'ticket_category'}
+    ROLE_KEYS = {'auto_role', 'rules_role_id'}
+    
+    patch = {}
+    for k, v in request.json.items():
+        if v is None:
+            continue  # Ignorer les None
+        
+        # Pour les clés de channel/role, convertir en int ou ignorer si vide
+        if k in CHANNEL_KEYS or k in ROLE_KEYS:
+            if v == '' or v == 0 or v is False:
+                continue  # Ne pas écraser avec une valeur vide
+            try:
+                patch[k] = int(v)
+            except (ValueError, TypeError):
+                continue
+        elif isinstance(v, str) and v.strip() == '':
+            continue  # Ignorer les strings vides pour tous les champs
+        else:
+            patch[k] = v
+    
+    c[guild_id].update(patch)
+    scfg(c)
     return jsonify({'success': True, 'config': c[guild_id]})
 
 @app_flask.route('/api/stats/<guild_id>')
