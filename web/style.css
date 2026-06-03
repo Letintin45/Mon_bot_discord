@@ -13,7 +13,14 @@
   }
   .sidebar { position: fixed; left: 0; top: 0; bottom: 0; width: 240px; background: var(--surface); border-right: 1px solid var(--border); display: flex; flex-direction: column; z-index: 100; }
   .sidebar-logo { padding: 24px 20px; border-bottom: 1px solid var(--border); }
-  .sidebar-logo h1 { font-size: 16px; font-weight: 800; background: linear-gradient(135deg, #5865f2, #7289da); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+.sidebar-logo h1 { 
+    font-size: 16px; 
+    font-weight: 800; 
+    background: linear-gradient(135deg, #5865f2, #7289da); 
+    -webkit-background-clip: text; 
+    background-clip: text; /* <-- Ajoute cette ligne */
+    -webkit-text-fill-color: transparent; 
+}
   .sidebar-logo p { font-size: 11px; color: var(--text-muted); margin-top: 2px; font-family: 'JetBrains Mono', monospace; }
   .guild-selector { padding: 16px; border-bottom: 1px solid var(--border); }
   .guild-selector select { width: 100%; background: var(--surface2); border: 1px solid var(--border); color: var(--text); padding: 8px 12px; border-radius: 8px; font-size: 13px; font-family: 'Syne', sans-serif; outline: none; }

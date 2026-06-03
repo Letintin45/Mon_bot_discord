@@ -18,25 +18,58 @@ def is_staff(member):
 # ============================================================
 # 1. INIT ET GESTION DES FICHIERS (Dossier /data)
 # ============================================================
+from supabase import create_client, Client
+
 load_dotenv()
 TOKEN = os.getenv('DISCORD_TOKEN')
 OWNER_ID = int(os.getenv('OWNER_ID', '0'))
 DASHBOARD_PORT = int(os.getenv('DASHBOARD_PORT', '5000'))
 
-# Crée le dossier data s'il n'existe pas
-os.makedirs('data', exist_ok=True)
+# --- CONNEXION SUPABASE ---
+SUPABASE_URL = os.getenv('SUPABASE_URL')
+SUPABASE_KEY = os.getenv('SUPABASE_KEY')
+supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+
+def _get_pk(table_name):
+    """Détermine la colonne clé primaire en fonction de la table"""
+    if table_name == 'reminders': return 'id'
+    if table_name == 'notes': return 'user_id'
+    return 'guild_id'
 
 def _load(filename, default):
-    filepath = os.path.join('data', filename)
-    if os.path.exists(filepath):
-        with open(filepath, 'r', encoding='utf-8') as f:
-            return json.load(f)
-    return default
+    table = filename.replace('.json', '')
+    try:
+        res = supabase.table(table).select("*").execute()
+        
+        # Cas spécial pour les rappels qui sont une simple liste
+        if isinstance(default, list) and table == 'reminders': 
+            if res.data: return res.data[0]['data']
+            return default
+            
+        # Pour tous les autres fichiers (Dictionnaires)
+        result = {}
+        pk = _get_pk(table)
+        for row in res.data:
+            result[str(row[pk])] = row['data']
+        return result
+    except Exception as e:
+        print(f"⚠️ Erreur de chargement Supabase ({table}) : {e}")
+        return default
 
 def _save(filename, data):
-    filepath = os.path.join('data', filename)
-    with open(filepath, 'w', encoding='utf-8') as f:
-        json.dump(data, f, indent=2, ensure_ascii=False)
+    table = filename.replace('.json', '')
+    try:
+        # Cas spécial pour les rappels
+        if isinstance(data, list) and table == 'reminders': 
+            supabase.table(table).upsert({'id': 'global', 'data': data}).execute()
+            return
+
+        # Pour tous les autres fichiers (On met à jour ligne par ligne)
+        pk = _get_pk(table)
+        for key, val in data.items():
+            supabase.table(table).upsert({pk: str(key), 'data': val}).execute()
+    except Exception as e:
+        print(f"⚠️ Erreur de sauvegarde Supabase ({table}) : {e}")
 
 def joined_members(): return _load('joined_members.json', {})
 def sjoined(d): _save('joined_members.json', d)
@@ -619,13 +652,42 @@ async def set_modlog(interaction: discord.Interaction, salon: discord.TextChanne
     c[gid]['mod_log_channel'] = salon.id; scfg(c)
     await interaction.response.send_message(f"✅ Logs modération : {salon.mention}", ephemeral=True)
 
-@bot.tree.command(name="set_sugg", description="Salon des suggestions.")
+@bot.tree.command(name="set_sugg", description="Définit le salon des suggestions et envoie les règles.")
 @app_commands.default_permissions(administrator=True)
 async def set_sugg(interaction: discord.Interaction, salon: discord.TextChannel):
+    # 1. Sauvegarde dans la base de données (Supabase)
     c = cfg(); gid = str(interaction.guild.id)
     if gid not in c: c[gid] = {}
-    c[gid]['suggestion_channel'] = salon.id; scfg(c)
-    await interaction.response.send_message(f"✅ Suggestions : {salon.mention}", ephemeral=True)
+    c[gid]['suggestion_channel'] = salon.id
+    scfg(c)
+    
+    # 2. Création du bel Embed d'explication adapté à ChunkLock
+    embed = discord.Embed(
+        title="💡 Salon de Suggestions",
+        description=(
+            "Bienvenue dans le salon des suggestions de **ChunkLock** !\n\n"
+            "**Comment faire une suggestion ?**\n"
+            "Pour garder ce salon propre et organisé, nous utilisons une commande dédiée :\n"
+            "👉 Utilisez simplement la commande `/suggest`\n"
+            "👉 Choisissez la catégorie (**Jeu** ou **Discord**)\n"
+            "👉 Écrivez votre idée et validez !\n\n"
+            "**Directives :**\n"
+            "• Soyez clair et précis dans vos explications.\n"
+            "• Une seule idée par suggestion.\n"
+            "• Gardez les suggestions constructives et respectueuses.\n"
+            "• Pensez aux améliorations globales pour ChunkLock.\n\n"
+            "*Un fil de discussion (thread) sera créé sous chaque suggestion validée pour débattre avec les réactions ✅ et ❌ !*"
+        ),
+        color=0xffcc00 # Un beau jaune/orange
+    )
+    embed.set_footer(text="L'équipe de ChunkLock")
+    
+    # 3. Envoi du message dans le salon cible
+    await salon.send(embed=embed)
+    
+    # 4. Message de confirmation discret pour l'administrateur
+    await interaction.response.send_message(f"✅ Salon configuré sur {salon.mention} et message des règles envoyé !", ephemeral=True)
+    
 
 @bot.tree.command(name="set_levelchan", description="Salon des annonces de level up.")
 @app_commands.default_permissions(administrator=True)
@@ -882,6 +944,8 @@ async def topinvites(interaction: discord.Interaction):
                 embed.add_field(name=f"{medals[i]} {user.name}", value=f"**{count}** invitations", inline=False)
             except: pass
     await interaction.followup.send(embed=embed)
+
+
 
 # ============================================================
 # 9. ÉCONOMIE
