@@ -338,6 +338,13 @@ async function sendPoll() {
   toast('Sondage créé !');
 }
 
+// ── DONNEES ──
+async function loadInvites() {
+  const data = await (await fetch(`${API}/invites/${currentGuild}`)).json();
+  const sorted = Object.entries(data).sort((a,b) => (b[1].count||0) - (a[1].count||0)).slice(0,20);
+  document.getElementById('invitesTable').innerHTML = !sorted.length ? `<p>Aucune donnée</p>` : `<table><thead><tr><th>User ID</th><th>Invitations</th></tr></thead><tbody>`+sorted.map(([u,d])=>`<tr><td>${u}</td><td><span class="badge badge-green">${d.count} invites</span></td></tr>`).join('')+`</tbody></table>`;
+}
+
 async function loadJoinedMembers() {
     try {
         const response = await fetch(`${API}/joined_members/${currentGuild}`);
@@ -345,15 +352,27 @@ async function loadJoinedMembers() {
         
         const tbody = document.getElementById('joinedMembersBody');
         if (!tbody) return;
-        tbody.innerHTML = ''; // On vide le tableau avant de le remplir
+        tbody.innerHTML = ''; 
 
-        // On crée une ligne pour chaque membre
+        // S'il n'y a pas de données
+        if (Object.keys(data).length === 0) {
+            tbody.innerHTML = '<tr><td colspan="3" style="text-align:center;">Aucun membre n\'a rejoint via invitation depuis l\'activation du log.</td></tr>';
+            return;
+        }
+
         for (const [memberId, info] of Object.entries(data)) {
             const row = document.createElement('tr');
             
-            // Sécurité pour la compatibilité avec tes anciennes sauvegardes
-            const inviterId = typeof info === 'string' ? info : (info.inviter_id || 'Aucun');
-            const isValid = typeof info === 'string' ? true : info.is_valid;
+            // On s'assure de bien extraire l'info, même si c'est un ancien format
+            let inviterId = 'Aucun';
+            let isValid = true;
+
+            if (typeof info === 'object') {
+                inviterId = info.inviter_id || 'Aucun';
+                isValid = info.is_valid !== false; // Si non défini, on considère True par défaut
+            } else if (typeof info === 'string') {
+                inviterId = info;
+            }
             
             row.innerHTML = `
                 <td>${memberId}</td>
@@ -365,13 +384,6 @@ async function loadJoinedMembers() {
     } catch(e) { 
         console.error("Erreur chargement membres:", e); 
     }
-}
-
-// ── DONNEES ──
-async function loadInvites() {
-  const data = await (await fetch(`${API}/invites/${currentGuild}`)).json();
-  const sorted = Object.entries(data).sort((a,b) => (b[1].count||0) - (a[1].count||0)).slice(0,20);
-  document.getElementById('invitesTable').innerHTML = !sorted.length ? `<p>Aucune donnée</p>` : `<table><thead><tr><th>User ID</th><th>Invitations</th></tr></thead><tbody>`+sorted.map(([u,d])=>`<tr><td>${u}</td><td><span class="badge badge-green">${d.count} invites</span></td></tr>`).join('')+`</tbody></table>`;
 }
 
 async function loadWarns() {
