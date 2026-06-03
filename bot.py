@@ -596,7 +596,7 @@ async def on_raw_reaction_remove(payload):
 # ============================================================
 # 6. SETUP & CONFIGURATION (Commandes Slash)
 # ============================================================
-@bot.tree.command(name="setup_rules", description="Génère l'embed des règles.")
+@bot.tree.command(name="config-regles", description="Génère l'embed des règles.")
 @app_commands.default_permissions(administrator=True)
 async def setup_rules(interaction: discord.Interaction, salon: discord.TextChannel, role: discord.Role):
     c = cfg(); gid = str(interaction.guild.id); gc = c.get(gid, {})
@@ -609,7 +609,7 @@ async def setup_rules(interaction: discord.Interaction, salon: discord.TextChann
     c[gid].update({'rules_message_id': msg.id, 'rules_role_id': role.id})
     scfg(c)
 
-@bot.tree.command(name="setup_ticket", description="Installe le système de tickets.")
+@bot.tree.command(name="config-tickets", description="Installe le système de tickets.")
 @app_commands.default_permissions(administrator=True)
 async def setup_ticket(interaction: discord.Interaction, categorie: discord.CategoryChannel, salon: discord.TextChannel = None):
     c = cfg(); gid = str(interaction.guild.id)
@@ -620,7 +620,7 @@ async def setup_ticket(interaction: discord.Interaction, categorie: discord.Cate
     await target.send(embed=embed, view=TicketOpenerView())
     await interaction.response.send_message(f"✅ Installé dans {target.mention}", ephemeral=True)
 
-@bot.tree.command(name="set_welcome", description="Salon de bienvenue.")
+@bot.tree.command(name="config-bienvenue", description="Salon de bienvenue.")
 @app_commands.default_permissions(administrator=True)
 async def set_welcome(interaction: discord.Interaction, salon: discord.TextChannel):
     c = cfg(); gid = str(interaction.guild.id)
@@ -628,7 +628,7 @@ async def set_welcome(interaction: discord.Interaction, salon: discord.TextChann
     c[gid]['welcome_channel'] = salon.id; scfg(c)
     await interaction.response.send_message(f"✅ Bienvenue : {salon.mention}", ephemeral=True)
 
-@bot.tree.command(name="set_leave", description="Salon de départ.")
+@bot.tree.command(name="config-depart", description="Salon de départ.")
 @app_commands.default_permissions(administrator=True)
 async def set_leave(interaction: discord.Interaction, salon: discord.TextChannel):
     c = cfg(); gid = str(interaction.guild.id)
@@ -636,7 +636,7 @@ async def set_leave(interaction: discord.Interaction, salon: discord.TextChannel
     c[gid]['leave_channel'] = salon.id; scfg(c)
     await interaction.response.send_message(f"✅ Départ : {salon.mention}", ephemeral=True)
 
-@bot.tree.command(name="set_logs", description="Salon des logs globaux.")
+@bot.tree.command(name="config-logs", description="Salon des logs globaux.")
 @app_commands.default_permissions(administrator=True)
 async def set_logs(interaction: discord.Interaction, salon: discord.TextChannel):
     c = cfg(); gid = str(interaction.guild.id)
@@ -644,7 +644,7 @@ async def set_logs(interaction: discord.Interaction, salon: discord.TextChannel)
     c[gid]['log_channel'] = salon.id; scfg(c)
     await interaction.response.send_message(f"✅ Logs : {salon.mention}", ephemeral=True)
 
-@bot.tree.command(name="set_modlog", description="Salon des logs de modération (ban/kick/warn...).")
+@bot.tree.command(name="config-modlog", description="Salon des logs de modération (ban/kick/warn...).")
 @app_commands.default_permissions(administrator=True)
 async def set_modlog(interaction: discord.Interaction, salon: discord.TextChannel):
     c = cfg(); gid = str(interaction.guild.id)
@@ -652,7 +652,7 @@ async def set_modlog(interaction: discord.Interaction, salon: discord.TextChanne
     c[gid]['mod_log_channel'] = salon.id; scfg(c)
     await interaction.response.send_message(f"✅ Logs modération : {salon.mention}", ephemeral=True)
 
-@bot.tree.command(name="set_sugg", description="Définit le salon des suggestions et envoie les règles.")
+@bot.tree.command(name="config-suggestions", description="Définit le salon des suggestions et envoie les règles.")
 @app_commands.default_permissions(administrator=True)
 async def set_sugg(interaction: discord.Interaction, salon: discord.TextChannel):
     # 1. Sauvegarde dans la base de données (Supabase)
@@ -687,9 +687,9 @@ async def set_sugg(interaction: discord.Interaction, salon: discord.TextChannel)
     
     # 4. Message de confirmation discret pour l'administrateur
     await interaction.response.send_message(f"✅ Salon configuré sur {salon.mention} et message des règles envoyé !", ephemeral=True)
-    
 
-@bot.tree.command(name="set_levelchan", description="Salon des annonces de level up.")
+
+@bot.tree.command(name="config-levelup", description="Salon des annonces de level up.")
 @app_commands.default_permissions(administrator=True)
 async def set_levelchan(interaction: discord.Interaction, salon: discord.TextChannel):
     c = cfg(); gid = str(interaction.guild.id)
@@ -697,7 +697,7 @@ async def set_levelchan(interaction: discord.Interaction, salon: discord.TextCha
     c[gid]['level_channel'] = salon.id; scfg(c)
     await interaction.response.send_message(f"✅ Level-up : {salon.mention}", ephemeral=True)
 
-@bot.tree.command(name="set_autorole", description="Rôle automatique à l'arrivée.")
+@bot.tree.command(name="config-autorole", description="Rôle automatique à l'arrivée.")
 @app_commands.default_permissions(administrator=True)
 async def set_autorole(interaction: discord.Interaction, role: discord.Role):
     c = cfg(); gid = str(interaction.guild.id)
@@ -705,7 +705,7 @@ async def set_autorole(interaction: discord.Interaction, role: discord.Role):
     c[gid]['auto_role'] = role.id; scfg(c)
     await interaction.response.send_message(f"✅ Auto-rôle : {role.mention}", ephemeral=True)
 
-@bot.tree.command(name="set_levelrole", description="Attribue un rôle à un niveau précis.")
+@bot.tree.command(name="config-levelrole", description="Attribue un rôle à un niveau précis.")
 @app_commands.default_permissions(administrator=True)
 async def set_levelrole(interaction: discord.Interaction, niveau: int, role: discord.Role):
     c = cfg(); gid = str(interaction.guild.id)
@@ -714,7 +714,7 @@ async def set_levelrole(interaction: discord.Interaction, niveau: int, role: dis
     c[gid]['level_roles'][str(niveau)] = role.id; scfg(c)
     await interaction.response.send_message(f"✅ Niveau **{niveau}** → {role.mention}", ephemeral=True)
 
-@bot.tree.command(name="set_maxtickets", description="Limite le nombre de tickets ouverts simultanément (0 = illimité).")
+@bot.tree.command(name="config-maxtickets", description="Limite le nombre de tickets ouverts simultanément (0 = illimité).")
 @app_commands.default_permissions(administrator=True)
 async def set_maxtickets(interaction: discord.Interaction, max: int):
     c = cfg(); gid = str(interaction.guild.id)
@@ -723,7 +723,7 @@ async def set_maxtickets(interaction: discord.Interaction, max: int):
     msg = f"✅ Max tickets : **{max}**" if max > 0 else "✅ Limite de tickets désactivée."
     await interaction.response.send_message(msg, ephemeral=True)
 
-@bot.tree.command(name="antispam", description="Active/désactive l'anti-spam.")
+@bot.tree.command(name="config-antispam", description="Active/désactive l'anti-spam.")
 @app_commands.default_permissions(administrator=True)
 async def antispam(interaction: discord.Interaction):
     c = cfg(); gid = str(interaction.guild.id)
@@ -731,7 +731,7 @@ async def antispam(interaction: discord.Interaction):
     c[gid]['anti_spam'] = not c[gid].get('anti_spam', False); scfg(c)
     await interaction.response.send_message(f"🛡️ Anti-spam {'activé' if c[gid]['anti_spam'] else 'désactivé'}.", ephemeral=True)
 
-@bot.tree.command(name="banword", description="Ajoute un mot interdit (automod).")
+@bot.tree.command(name="config-banword", description="Ajoute un mot interdit (automod).")
 @app_commands.default_permissions(administrator=True)
 async def banword(interaction: discord.Interaction, mot: str):
     c = cfg(); gid = str(interaction.guild.id)
@@ -760,7 +760,7 @@ async def ban(interaction: discord.Interaction, membre: discord.Member, raison: 
     except discord.Forbidden:
         await interaction.response.send_message("❌ Permission refusée.", ephemeral=True)
 
-@bot.tree.command(name="unban", description="Débannit un utilisateur par ID.")
+@bot.tree.command(name="deban", description="Révoquer le bannissement d'un utilisateur.")
 @app_commands.default_permissions(ban_members=True)
 async def unban(interaction: discord.Interaction, user_id: str):
     try:
@@ -770,7 +770,7 @@ async def unban(interaction: discord.Interaction, user_id: str):
     except:
         await interaction.response.send_message("❌ Introuvable.", ephemeral=True)
 
-@bot.tree.command(name="kick", description="Expulse un membre.")
+@bot.tree.command(name="expulser", description="Expulser un membre.")
 @app_commands.default_permissions(kick_members=True)
 async def kick(interaction: discord.Interaction, membre: discord.Member, raison: str = "Aucune raison"):
     if membre.top_role >= interaction.user.top_role:
@@ -800,13 +800,13 @@ async def mute(interaction: discord.Interaction, membre: discord.Member, duree: 
     except discord.Forbidden:
         await interaction.response.send_message("❌ Permission refusée.", ephemeral=True)
 
-@bot.tree.command(name="unmute", description="Retire le timeout d'un membre.")
+@bot.tree.command(name="demute", description="Retirer la réduction au silence d'un membre.")
 @app_commands.default_permissions(moderate_members=True)
 async def unmute(interaction: discord.Interaction, membre: discord.Member):
     await membre.timeout(None)
     await interaction.response.send_message(f"✅ {membre.mention} démute.", ephemeral=True)
 
-@bot.tree.command(name="warn", description="Avertit un membre.")
+@bot.tree.command(name="avertir", description="Avertir un membre.")
 @app_commands.default_permissions(moderate_members=True)
 async def warn(interaction: discord.Interaction, membre: discord.Member, raison: str):
     w = wrn(); gid = str(interaction.guild.id); uid = str(membre.id)
@@ -822,7 +822,7 @@ async def warn(interaction: discord.Interaction, membre: discord.Member, raison:
     await interaction.response.send_message(embed=embed)
     await send_mod_log(interaction.guild, embed)
 
-@bot.tree.command(name="unwarn", description="Retire le dernier avertissement d'un membre.")
+@bot.tree.command(name="infractions-retirer", description="Retirer la dernière infraction d'un membre.")
 @app_commands.default_permissions(moderate_members=True)
 async def unwarn(interaction: discord.Interaction, membre: discord.Member):
     w = wrn(); gid = str(interaction.guild.id); uid = str(membre.id)
@@ -835,21 +835,21 @@ async def unwarn(interaction: discord.Interaction, membre: discord.Member):
     swrn(w)
     await interaction.response.send_message(f"✅ Dernier warn de {membre.mention} retiré.\n*Raison retirée : {removed['raison']}*", ephemeral=True)
 
-@bot.tree.command(name="warns", description="Voir les avertissements d'un membre.")
+@bot.tree.command(name="infractions-lister", description="Afficher les infractions d'un membre.")
 @app_commands.default_permissions(moderate_members=True)
 async def warns_cmd(interaction: discord.Interaction, membre: discord.Member):
     w = wrn(); user_warns = w.get(str(interaction.guild.id), {}).get(str(membre.id), [])
     if not user_warns:
-        return await interaction.response.send_message(f"✅ Aucun avertissement pour {membre.mention}.", ephemeral=True)
+        return await interaction.response.send_message(f"✅ Aucune infraction pour {membre.mention}.", ephemeral=True)
         
-    embed = discord.Embed(title=f"⚠️ Warns de {membre}", color=discord.Color.orange())
+    embed = discord.Embed(title=f"⚠️ Infractions de {membre}", color=discord.Color.orange())
     embed.set_thumbnail(url=membre.display_avatar.url)
     for i, ww in enumerate(user_warns, 1):
         embed.add_field(name=f"#{i} — par {ww['mod']}", value=ww['raison'], inline=False)
     embed.set_footer(text=f"Total : {len(user_warns)}")
     await interaction.response.send_message(embed=embed)
 
-@bot.tree.command(name="clearwarns", description="Efface tous les avertissements d'un membre.")
+@bot.tree.command(name="infractions-reinitialiser", description="Réinitialiser les infractions d'un membre.")
 @app_commands.default_permissions(administrator=True)
 async def clearwarns(interaction: discord.Interaction, membre: discord.Member):
     w = wrn(); gid = str(interaction.guild.id); uid = str(membre.id)
@@ -956,7 +956,7 @@ def get_wallet(gid, uid):
     if uid not in e[gid]: e[gid][uid] = {'coins': 0, 'bank': 0, 'last_daily': 0, 'last_work': 0}
     return e, e[gid][uid]
 
-@bot.tree.command(name="balance", description="Vérifie ton solde.")
+@bot.tree.command(name="solde", description="Vérifie ton solde.")
 async def balance(interaction: discord.Interaction, membre: discord.Member = None):
     m = membre or interaction.user
     e, wallet = get_wallet(str(interaction.guild.id), str(m.id))
@@ -967,7 +967,7 @@ async def balance(interaction: discord.Interaction, membre: discord.Member = Non
     embed.add_field(name="Total", value=f"**{wallet['coins'] + wallet['bank']:,}** 💎")
     await interaction.response.send_message(embed=embed)
 
-@bot.tree.command(name="daily", description="Réclame ta récompense journalière.")
+@bot.tree.command(name="journalier", description="Réclame ta récompense journalière.")
 async def daily(interaction: discord.Interaction):
     gid = str(interaction.guild.id); uid = str(interaction.user.id)
     e, wallet = get_wallet(gid, uid); now = datetime.now(timezone.utc).timestamp()
@@ -979,7 +979,7 @@ async def daily(interaction: discord.Interaction):
     embed = discord.Embed(title="🎁 Daily !", description=f"+**{amount}** 🪙", color=0xffd700)
     await interaction.response.send_message(embed=embed)
 
-@bot.tree.command(name="work", description="Travaille (cooldown 1h).")
+@bot.tree.command(name="travail", description="Travaille (cooldown 1h).")
 async def work(interaction: discord.Interaction):
     gid = str(interaction.guild.id); uid = str(interaction.user.id)
     e, wallet = get_wallet(gid, uid); now = datetime.now(timezone.utc).timestamp()
@@ -991,7 +991,7 @@ async def work(interaction: discord.Interaction):
     embed = discord.Embed(title="💼 Travail !", description=f"En tant que **{random.choice(jobs)}** : +**{amount}** 🪙", color=0x00bfff)
     await interaction.response.send_message(embed=embed)
 
-@bot.tree.command(name="deposit", description="Dépose des coins à la banque.")
+@bot.tree.command(name="déposer", description="Dépose des coins à la banque.")
 async def deposit(interaction: discord.Interaction, montant: int):
     gid = str(interaction.guild.id); uid = str(interaction.user.id)
     e, wallet = get_wallet(gid, uid)
@@ -1000,7 +1000,7 @@ async def deposit(interaction: discord.Interaction, montant: int):
     e[gid][uid]['coins'] -= montant; e[gid][uid]['bank'] += montant; seco(e)
     await interaction.response.send_message(f"🏦 +**{montant}** 🪙 en banque.", ephemeral=True)
 
-@bot.tree.command(name="withdraw", description="Retire des coins de la banque.")
+@bot.tree.command(name="retirer", description="Retire des coins de la banque.")
 async def withdraw(interaction: discord.Interaction, montant: int):
     gid = str(interaction.guild.id); uid = str(interaction.user.id)
     e, wallet = get_wallet(gid, uid)
@@ -1009,7 +1009,7 @@ async def withdraw(interaction: discord.Interaction, montant: int):
     e[gid][uid]['bank'] -= montant; e[gid][uid]['coins'] += montant; seco(e)
     await interaction.response.send_message(f"💸 +**{montant}** 🪙 retirés.", ephemeral=True)
 
-@bot.tree.command(name="gamble", description="Parie tes coins (50/50).")
+@bot.tree.command(name="parier", description="Parie tes coins (50/50).")
 async def gamble(interaction: discord.Interaction, montant: int):
     gid = str(interaction.guild.id); uid = str(interaction.user.id)
     e, wallet = get_wallet(gid, uid)
@@ -1020,7 +1020,7 @@ async def gamble(interaction: discord.Interaction, montant: int):
     embed = discord.Embed(title="🎰 Gagné !" if win else "🎰 Perdu !", description=f"{'+'if win else '-'}**{montant}** 🪙", color=discord.Color.green() if win else discord.Color.red())
     await interaction.response.send_message(embed=embed)
 
-@bot.tree.command(name="give", description="Donne des coins à un autre membre.")
+@bot.tree.command(name="payer", description="Donne des coins à un autre membre.")
 async def give(interaction: discord.Interaction, membre: discord.Member, montant: int):
     if membre.bot or membre == interaction.user:
         return await interaction.response.send_message("❌ Cible invalide.", ephemeral=True)
@@ -1033,7 +1033,7 @@ async def give(interaction: discord.Interaction, membre: discord.Member, montant
     e[gid][str(membre.id)]['coins'] += montant; seco(e)
     await interaction.response.send_message(f"✅ **{montant}** 🪙 → {membre.mention}")
 
-@bot.tree.command(name="lb", description="Top 10 économie.")
+@bot.tree.command(name="leaderboard", description="Top 10 économie.")
 async def lb(interaction: discord.Interaction):
     e = eco(); gid = str(interaction.guild.id)
     sorted_users = sorted(e.get(gid, {}).items(), key=lambda x: x[1].get('coins', 0) + x[1].get('bank', 0), reverse=True)[:10]
@@ -1121,7 +1121,7 @@ async def giveaway(interaction: discord.Interaction, duree: int, gagnants: int, 
 # ============================================================
 # 12. RAPPELS & UTILITAIRES
 # ============================================================
-@bot.tree.command(name="remind", description="Crée un rappel.")
+@bot.tree.command(name="rappel-creer", description="Créer un rappel.")
 async def remind(interaction: discord.Interaction, duree: int, unite: str, texte: str):
     multipliers = {'s': 1, 'min': 60, 'h': 3600, 'j': 86400}
     mult = multipliers.get(unite, 60)
@@ -1176,7 +1176,7 @@ async def ping(interaction: discord.Interaction):
     embed = discord.Embed(title="🏓 Pong !", description=f"**{ms}ms**", color=c)
     await interaction.response.send_message(embed=embed)
 
-@bot.tree.command(name="say", description="Fait parler le bot (owner).")
+@bot.tree.command(name="envoyer", description="Envoyer un message sous l'identité du bot.")
 async def say(interaction: discord.Interaction, texte: str, salon: discord.TextChannel = None):
     if interaction.user.id != OWNER_ID:
         return await interaction.response.send_message("❌ Owner seulement.", ephemeral=True)
@@ -1201,7 +1201,7 @@ async def notes(interaction: discord.Interaction):
         embed.add_field(name=f"#{i}", value=note_item['texte'], inline=False)
     await interaction.response.send_message(embed=embed, ephemeral=True)
 
-@bot.tree.command(name="flip", description="Pile ou face.")
+@bot.tree.command(name="pile-face", description="Jouer à pile ou face.")
 async def flip(interaction: discord.Interaction):
     await interaction.response.send_message(f"**{random.choice(['Pile 🪙', 'Face 🌟'])}** !")
 
@@ -1222,35 +1222,36 @@ async def eightball(interaction: discord.Interaction, question: str):
     embed.add_field(name="❓", value=question); embed.add_field(name="🔮", value=random.choice(answers))
     await interaction.response.send_message(embed=embed)
 
-@bot.tree.command(name="help", description="Affiche toutes les commandes du bot.")
+@bot.tree.command(name="aide", description="Affiche toutes les commandes du bot.")
 @app_commands.choices(categorie=[
     app_commands.Choice(name="Setup", value="⚙️ Setup"),
     app_commands.Choice(name="Modération", value="🔨 Modération"),
+    app_commands.Choice(name="Conversations", value="💬 Conversations"),
     app_commands.Choice(name="Invitations", value="📨 Invitations"),
     app_commands.Choice(name="Économie", value="💰 Économie"),
     app_commands.Choice(name="Niveaux", value="⭐ Niveaux"),
     app_commands.Choice(name="Fun", value="🎮 Fun"),
-    app_commands.Choice(name="Utils", value="🛠️ Utils")
+    app_commands.Choice(name="Informations", value="ℹ️ Informations")
 ])
-async def help_cmd(interaction: discord.Interaction, categorie: app_commands.Choice[str] = None):
+async def aide_cmd(interaction: discord.Interaction, categorie: app_commands.Choice[str] = None):
     categories = {
-        "⚙️ Setup": [("`/setup_rules`","Règles"),("`/setup_ticket`","Tickets"),("`/set_welcome`","Bienvenue"),("`/set_leave`","Départ"),("`/set_logs`","Logs global"),("`/set_modlog`","Logs modération"),("`/set_sugg`","Suggestions"),("`/set_levelchan`","Level-up"),("`/set_autorole`","Auto-rôle"),("`/set_levelrole`","Rôle niveau"),("`/set_maxtickets`","Max tickets"),("`/antispam`","Anti-spam"),("`/banword`","Mot interdit")],
-        "🔨 Modération": [("`/ban`","Ban"),("`/unban`","Unban ID"),("`/kick`","Kick"),("`/mute`","Mute"),("`/unmute`","Unmute"),("`/warn`","Warn"),("`/unwarn`","Unwarn dernier"),("`/warns`","Voir warns"),("`/clearwarns`","Purger warns"),("`/purge`","Purger MSG"),("`/slowmode`","Slowmode"),("`/lock`","Lock salon"),("`/unlock`","Unlock salon")],
+        "⚙️ Setup": [("`/config-regles`","Règles"),("`/config-tickets`","Tickets"),("`/config-bienvenue`","Bienvenue"),("`/config-depart`","Départ"),("`/config-logs`","Logs global"),("`/config-modlog`","Logs modération"),("`/config-suggestions`","Suggestions"),("`/config-levelup`","Level-up"),("`/config-autorole`","Auto-rôle"),("`/config-levelrole`","Rôle niveau"),("`/config-maxtickets`","Max tickets"),("`/config-antispam`","Anti-spam"),("`/config-banword`","Mot interdit")],
+        "🔨 Modération": [("`/ban`","Bannir"),("`/deban`","Débannir"),("`/expulser`","Expulser"),("`/mute`","Rendre muet"),("`/demute`","Démute"),("`/avertir`","Avertir"),("`/infractions-retirer`","Unwarn"),("`/infractions-lister`","Voir warns"),("`/infractions-reinitialiser`","Purger warns"),("`/slowmode`","Slowmode"),("`/lock`","Lock salon"),("`/unlock`","Unlock salon")],
+        "💬 Conversations": [("`/purge`","Supprimer des messages")],
         "📨 Invitations": [("`/invites`","Invitations perso"),("`/topinvites`","Top inviteurs")],
-        "💰 Économie": [("`/balance`","Solde"),("`/daily`","Quotidien"),("`/work`","Travailler"),("`/deposit`","Déposer"),("`/withdraw`","Retirer"),("`/gamble`","Parier"),("`/give`","Donner"),("`/lb`","Top économie")],
+        "💰 Économie": [("`/solde`","Solde"),("`/journalier`","Quotidien"),("`/travail`","Travailler"),("`/déposer`","Déposer"),("`/retirer`","Retirer"),("`/parier`","Parier"),("`/payer`","Donner"),("`/leaderboard`","Top économie")],
         "⭐ Niveaux": [("`/rank`","Niveau"),("`/leveltop`","Top niveaux")],
-        "🎮 Fun": [("`/poll`","Sondage"),("`/giveaway`","Giveaway"),("`/remind`","Rappel"),("`/flip`","Pile/Face"),("`/roll`","Dés"),("`/8ball`","Magique")],
-        "🛠️ Utils": [("`/embed`","Embed"),("`/userinfo`","Infos User"),("`/serverinfo`","Infos Serveur"),("`/avatar`","Avatar"),("`/ping`","Ping"),("`/note`","Ajouter Note"),("`/notes`","Mes Notes"),("`/say`","Dire")],
+        "🎮 Fun": [("`/poll`","Sondage"),("`/giveaway`","Giveaway"),("`/rappel-creer`","Rappel"),("`/pile-face`","Pile/Face"),("`/roll`","Dés"),("`/8ball`","Magique")],
+        "ℹ️ Informations": [("`/embed`","Embed"),("`/userinfo`","Infos User"),("`/serverinfo`","Infos Serveur"),("`/avatar`","Avatar"),("`/ping`","Ping"),("`/note`","Ajouter Note"),("`/notes`","Mes Notes"),("`/envoyer`","Dire")],
     }
     
     if categorie:
         cat_name = categorie.value
         embed = discord.Embed(title=f"❓ {cat_name}", color=0x5865F2)
         for cmd, desc in categories[cat_name]: 
-            # C'est ici que la magie s'opère : inline=True crée les colonnes !
             embed.add_field(name=cmd, value=desc, inline=True)
     else:
-        embed = discord.Embed(title="❓ Aide Administrateur", description="Utilise `/help [catégorie]` pour les détails.", color=0x5865F2, timestamp=discord.utils.utcnow())
+        embed = discord.Embed(title="❓ Aide Administrateur", description="Utilisez `/aide [catégorie]` pour les détails.", color=0x5865F2, timestamp=discord.utils.utcnow())
         for cat_name, cmds_list in categories.items():
             embed.add_field(name=cat_name, value=f"`{len(cmds_list)}` commandes", inline=True)
             
