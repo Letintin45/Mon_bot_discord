@@ -1571,6 +1571,10 @@ def api_test_rules(guild_id):
 @app_flask.route('/api/guilds', methods=['GET'])
 def get_guilds(): return jsonify([{'id': str(g.id), 'name': g.name, 'member_count': g.member_count} for g in bot.guilds])
 
+@app_flask.route('/api/config/<guild_id>', methods=['GET'])
+def get_config(guild_id):
+    return jsonify(cfg().get(guild_id, {}))
+
 @app_flask.route('/api/config/<guild_id>', methods=['POST'])
 def update_config(guild_id):
     c = cfg()
