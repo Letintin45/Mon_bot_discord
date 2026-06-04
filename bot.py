@@ -33,16 +33,27 @@ TOKEN = os.getenv('DISCORD_TOKEN')
 OWNER_ID = int(os.getenv('OWNER_ID', '0'))
 DASHBOARD_PORT = int(os.getenv('DASHBOARD_PORT', '5000'))
 
-# --- CONNEXION SUPABASE ---
+# --- CONNEXION SUPABASE (BOT) ---
 SUPABASE_URL = os.getenv('SUPABASE_URL')
-SUPABASE_KEY = os.getenv('SUPABASE_KEY')  # Doit être la clé SERVICE ROLE (pas anon)
+SUPABASE_KEY = os.getenv('SUPABASE_KEY')
 
 if not SUPABASE_URL or not SUPABASE_KEY:
-    print("❌ FATAL: SUPABASE_URL ou SUPABASE_KEY manquant dans les variables d'environnement !")
+    print("❌ FATAL: Clés Supabase Bot manquantes !")
     raise SystemExit(1)
 
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
-print(f"✅ Supabase connecté à {SUPABASE_URL[:40]}...")
+print(f"✅ Supabase BOT connecté !")
+
+# --- CONNEXION SUPABASE (JEU - Pour le /sync) ---
+SUPABASE_GAME_URL = os.getenv('SUPABASE_GAME_URL')
+SUPABASE_GAME_KEY = os.getenv('SUPABASE_GAME_KEY')
+
+if SUPABASE_GAME_URL and SUPABASE_GAME_KEY:
+    supabase_game = create_client(SUPABASE_GAME_URL, SUPABASE_GAME_KEY)
+    print("✅ Supabase JEU connecté !")
+else:
+    supabase_game = None
+    print("⚠️ Attention: Clés Supabase Jeu (SUPABASE_GAME_URL) manquantes.")
 
 def _get_pk(table_name):
     """Détermine la colonne clé primaire en fonction de la table"""
@@ -161,8 +172,7 @@ async def auto_sync_roles():
     
     try:
         # On extrait toutes les sauvegardes qui possèdent un ID Discord lié
-        response = supabase.table('players').select('discord_id, game_state').not_.is_('discord_id', 'null').execute()
-        
+        response = supabase_game.table('players').select('discord_id, game_state').not_.is_('discord_id', 'null').execute()        
         # 🔥 RÉSOLUTION DU MULTI-SAUVEGARDES : 
         # On calcule le niveau le plus haut pour chaque ID Discord unique
         max_levels = {}
@@ -913,8 +923,7 @@ async def sync_roles(interaction: discord.Interaction):
     
     try:
         # 1. On cherche toutes les sauvegardes de ce joueur grâce à son ID Discord
-        response = supabase.table('players').select('game_state').eq('discord_id', str(interaction.user.id)).execute()
-        
+        response = supabase_game.table('players').select('game_state').eq('discord_id', str(interaction.user.id)).execute()        
         if not response.data:
             await interaction.followup.send("❌ Aucun compte trouvé ! Va sur le jeu et clique sur **🔗 Rôles Discord** d'abord.")
             return
