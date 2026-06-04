@@ -1573,16 +1573,26 @@ def get_guilds(): return jsonify([{'id': str(g.id), 'name': g.name, 'member_coun
 
 
 #NE SURTOUT PAS SUPPRIMER : C'est la route centrale pour récupérer et mettre à jour la configuration d'un serveur depuis le dashboard.
+def sanitize_for_json(data):
+    """Convertit les grands entiers en chaînes pour éviter la perte de précision JS (limite 53 bits)."""
+    if isinstance(data, dict):
+        return {k: sanitize_for_json(v) for k, v in data.items()}
+    elif isinstance(data, list):
+        return [sanitize_for_json(v) for v in data]
+    elif isinstance(data, int) and data > 9999999999:
+        return str(data)
+    return data
+
 @app_flask.route('/api/config/<guild_id>', methods=['GET'])
 def get_config(guild_id):
-    return jsonify(cfg().get(guild_id, {}))
+    # 🟢 On protège les données avant de les envoyer au Dashboard
+    return jsonify(sanitize_for_json(cfg().get(guild_id, {})))
 
 @app_flask.route('/api/config/<guild_id>', methods=['POST'])
 def update_config(guild_id):
     c = cfg()
     if guild_id not in c: c[guild_id] = {}
 
-    # Définition des types de données
     CHANNEL_KEYS = {'welcome_channel', 'leave_channel', 'log_channel', 'mod_log_channel',
                     'suggestion_channel', 'level_channel', 'ticket_category'}
     ROLE_KEYS = {'auto_role', 'rules_role_id'}
@@ -1595,32 +1605,33 @@ def update_config(guild_id):
     }
 
     patch = {}
-    
     for k, v in request.json.items():
         if v is None: continue
 
-        # 1. Gestion des IDs Discord (Channels/Roles)
         if k in CHANNEL_KEYS or k in ROLE_KEYS:
             if v == '' or v == 0 or v is False: continue
-            try: patch[k] = int(v)
+            try: patch[k] = int(v) # Le bot convertit proprement en vrai Entier Python
             except: continue
             
-        # 2. Gestion des textes
         elif k in TEXT_KEYS:
             patch[k] = str(v)
             
-        # 3. Gestion des Listes (Ex: excluded_level_channels)
         elif isinstance(v, list):
-            patch[k] = v
+            parsed = []
+            for item in v:
+                try: parsed.append(int(item))
+                except: parsed.append(item)
+            patch[k] = parsed
             
-        # 4. Autres (Integers, Booleans)
         else:
             patch[k] = v
 
     c[guild_id].update(patch)
     scfg(c)
     print(f"✅ Config sauvegardée pour {guild_id} : {list(patch.keys())}")
-    return jsonify({'success': True, 'config': c[guild_id]})
+    
+    # 🟢 Retourne les données protégées
+    return jsonify({'success': True, 'config': sanitize_for_json(c[guild_id])})
 
 @app_flask.route('/api/stats/<guild_id>')
 def get_stats(guild_id):

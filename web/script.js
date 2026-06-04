@@ -144,13 +144,12 @@ async function populateSelects() {
     document.getElementById('ch_leave').innerHTML = chOpt('leave_channel');
     document.getElementById('ch_suggestions').innerHTML = chOpt('suggestion_channel');
 
-    // ... à la fin de ta fonction populateSelects ...
+    // 🟢 On convertit tout en String pour que le menu puisse comparer proprement
     const exSelect = document.getElementById('excludedLevelChannels');
-    const excluded = currentConfig.excluded_level_channels || []; // Liste des IDs déjà exclus
-    
+    const excluded = (currentConfig.excluded_level_channels || []).map(String); 
 
     exSelect.innerHTML = guildChannels.map(c => 
-        `<option value="${c.id}" ${excluded.includes(parseInt(c.id)) ? 'selected' : ''}>#${c.name}</option>`
+        `<option value="${c.id}" ${excluded.includes(String(c.id)) ? 'selected' : ''}>#${c.name}</option>`
     ).join('');
 
     renderLevelRoles();
@@ -289,12 +288,16 @@ async function saveChannels() {
     suggestion_channel: document.getElementById('ch_suggestions').value,
     level_channel:      document.getElementById('ch_levels').value,
   };
-  // On n'envoie QUE les champs avec une valeur non vide pour ne pas écraser
+  
+  // 🟢 On envoie le texte brut sans parseInt pour protéger l'ID Discord
   for (const [key, val] of Object.entries(channelFields)) {
-    if (val && val !== '') patch[key] = parseInt(val);
+    if (val && val !== '') patch[key] = val; 
   }
+  
+  // ticketMax est un petit nombre (ex: 10), donc parseInt est ok
   const maxT = parseInt(document.getElementById('ticketMax').value);
   if (!isNaN(maxT)) patch.ticket_max_open = maxT;
+  
   await saveConfig(patch);
   toast('Salons & Limites sauvegardés !');
 }
@@ -330,7 +333,9 @@ async function addDefaultWords() {
 
 async function saveExcludedChannels() {
     const select = document.getElementById('excludedLevelChannels');
-    const selected = Array.from(select.selectedOptions).map(option => parseInt(option.value));
+    // 🟢 Plus de parseInt ici non plus !
+    const selected = Array.from(select.selectedOptions).map(option => option.value);
+    
     await saveConfig({ excluded_level_channels: selected });
     toast('Exclusions sauvegardées !');
 }
@@ -338,7 +343,7 @@ async function saveExcludedChannels() {
 async function saveAutoRole() {
   const val = document.getElementById('autoRole').value;
   if (val && val !== '') {
-    await saveConfig({ auto_role: parseInt(val) });
+    await saveConfig({ auto_role: val }); // 🟢 Plus de parseInt
     toast('Auto-rôle ok !');
   } else {
     toast('Aucun rôle sélectionné', 'error');
@@ -357,11 +362,14 @@ function renderLevelRoles() {
 }
 
 async function addLevelRole() {
-  const lvl = document.getElementById('levelNum').value, rId = parseInt(document.getElementById('levelRole').value);
+  const lvl = document.getElementById('levelNum').value;
+  const rId = document.getElementById('levelRole').value; // 🟢 Plus de parseInt
   if (!lvl || !rId) return toast('Remplis tout', 'error');
   if (!currentConfig.level_roles) currentConfig.level_roles = {};
   currentConfig.level_roles[lvl] = rId;
-  await saveConfig({ level_roles: currentConfig.level_roles }); renderLevelRoles(); toast('Ajouté !');
+  await saveConfig({ level_roles: currentConfig.level_roles }); 
+  renderLevelRoles(); 
+  toast('Ajouté !');
 }
 
 async function removeLevelRole(lvl) { delete currentConfig.level_roles[lvl]; await saveConfig({ level_roles: currentConfig.level_roles }); renderLevelRoles(); }
