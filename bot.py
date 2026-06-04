@@ -908,23 +908,36 @@ async def on_raw_reaction_remove(payload):
 # ============================================================
 @bot.tree.command(name="sync", description="Synchronise tes rôles Discord avec ton niveau en jeu")
 async def sync_roles(interaction: discord.Interaction):
-    await interaction.response.defer() # Pour faire patienter Discord
+    # On dit à Discord de patienter
+    await interaction.response.defer() 
     
-    # 1. On cherche le joueur dans Supabase via son ID Discord
-    # (Adapte cette ligne selon comment tu as configuré ta requête Supabase)
-    user_data = supabase.table('users').select('level').eq('discord_id', str(interaction.user.id)).execute()
-    
-    if not user_data.data:
-        await interaction.followup.send("❌ Tu n'as pas encore créé de compte sur le jeu !")
-        return
+    try:
+        # 1. On cherche toutes les sauvegardes de ce joueur grâce à son ID Discord
+        response = supabase.table('players').select('game_state').eq('discord_id', str(interaction.user.id)).execute()
         
-    # 2. On récupère son niveau
-    player_level = user_data.data[0].get('level', 1)
-    
-    # 3. On lance la fonction de mise à jour !
-    await update_member_level_role(interaction.user, player_level)
-    
-    await interaction.followup.send(f"✅ Rôles synchronisés ! Tu es actuellement niveau {player_level}.")
+        if not response.data:
+            await interaction.followup.send("❌ Aucun compte trouvé ! Va sur le jeu et clique sur **🔗 Rôles Discord** d'abord.")
+            return
+            
+        # 2. On calcule son niveau maximum parmi toutes ses sauvegardes
+        max_level = 1
+        for row in response.data:
+            state = row.get('game_state', {})
+            # On vérifie que state est bien un dictionnaire avant de lire le niveau
+            level = state.get('level', 1) if isinstance(state, dict) else 1
+            if level > max_level:
+                max_level = level
+                
+        # 3. On lance la fonction pour lui donner le rôle
+        await update_member_level_role(interaction.user, max_level)
+        
+        # 4. Message de succès final
+        await interaction.followup.send(f"✅ Rôles synchronisés avec succès ! Tu es niveau {max_level}.")
+        
+    except Exception as e:
+        # S'il y a le moindre plantage, le bot l'affichera ici au lieu de bloquer 1 minute !
+        print(f"❌ Erreur lors de la commande /sync : {e}")
+        await interaction.followup.send(f"⚠️ Une erreur technique a empêché la synchronisation : `{e}`")
 
 
 @bot.tree.command(name="config-regles", description="Génère l'embed des règles.")
