@@ -378,20 +378,27 @@ async def on_message(message):
                 return # Arrête l'exécution ici
             except: pass
 
-    # --- NOUVEAU : 3. Anti-Pub (Liens Discord) ---
-    if "discord.gg/" in message.content.lower() or "discord.com/invite/" in message.content.lower():
-        # Si ce n'est pas un membre du staff ou un administrateur
-        if not is_staff(message.author) and not message.author.guild_permissions.administrator:
+    # --- NOUVEAU : 3. Anti-Pub Intelligent (Liens Discord) ---
+    match = re.search(r'(?:discord\.gg/|discord\.com/invite/)([a-zA-Z0-9-]+)', message.content, re.IGNORECASE)
+    if match:
+        code = match.group(1) # Récupère juste le code (ex: "X9a2B")
+        
+        # On vérifie si ce code appartient à CE serveur
+        tracked_invites = bot.invites_tracker.get(message.guild.id, {})
+        is_own_invite = (code in tracked_invites) or (code == message.guild.vanity_url_code)
+        
+        # Si c'est une pub pour un AUTRE serveur ET que ce n'est pas un staff
+        if not is_own_invite and not is_staff(message.author) and not message.author.guild_permissions.administrator:
             try:
                 await message.delete()
                 await message.channel.send(f"🚫 {message.author.mention}, la publicité pour d'autres serveurs est strictement interdite !", delete_after=8)
                 
-                # Envoi d'une alerte dans les logs de modération
-                embed_pub = discord.Embed(title="🚨 Tentative de Publicité", description=f"{message.author.mention} a essayé d'envoyer un lien d'invitation.", color=discord.Color.red(), timestamp=discord.utils.utcnow())
+                # Envoi d'une alerte dans les logs
+                embed_pub = discord.Embed(title="🚨 Tentative de Publicité", description=f"{message.author.mention} a essayé d'envoyer un lien d'invitation externe.", color=discord.Color.red(), timestamp=discord.utils.utcnow())
                 embed_pub.add_field(name="Salon", value=message.channel.mention)
                 embed_pub.add_field(name="Lien", value=message.content[:1000], inline=False)
                 await send_mod_log(message.guild, embed_pub)
-                return # Arrête l'exécution pour ne pas donner d'XP
+                return # Arrête l'exécution
             except: pass
 
     # ── Système de Suggestions ──
