@@ -1515,29 +1515,20 @@ async def aide_cmd(interaction: discord.Interaction, categorie: app_commands.Cho
 # ============================================================
 from flask import Flask, request, jsonify
 from flask_cors import CORS
+import urllib.request
+import json
 
 app_flask = Flask(__name__)
 
-# ✅ CORS complet : Netlify + dev local
+# ✅ CORS géré uniquement par Flask-CORS (Supprime les conflits de double-vérification)
 CORS(app_flask,
      resources={r"/*": {"origins": ["https://admin-tycoon-bot-dashboard.netlify.app"]}},
      allow_headers=["Content-Type", "Authorization"],
      methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
      supports_credentials=False)
 
-import urllib.request
-import json
-
 # 🔐 Cache des connexions Discord
 auth_cache = {}
-
-@app_flask.after_request
-def after_request(response):
-    """Injecte les headers CORS sur TOUTES les réponses."""
-    response.headers['Access-Control-Allow-Origin'] = '*'
-    response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
-    response.headers['Access-Control-Allow-Methods'] = 'GET, POST, PUT, DELETE, OPTIONS'
-    return response
 
 @app_flask.before_request
 def require_auth():
@@ -1551,18 +1542,21 @@ def require_auth():
     token = auth_header.replace('Bearer ', '').strip()
 
     if not token:
-        return jsonify({'success': False, 'error': 'Non autorisé. Connectez-vous avec Discord.'}), 401
+        return jsonify({'success': False, 'error': 'Non autorisé.'}), 401
 
-    # ✅ On demande à Discord "Qui est cette personne ?"
     if token not in auth_cache:
         req = urllib.request.Request("https://discord.com/api/users/@me")
         req.add_header("Authorization", f"Bearer {token}")
+        # ⚠️ INDISPENSABLE : Discord bloque les requêtes sans "User-Agent" !
+        req.add_header("User-Agent", "AdminTycoonBot (https://admin-tycoon-bot-dashboard.netlify.app, 1.0)")
+        
         try:
             with urllib.request.urlopen(req) as response:
                 user_data = json.loads(response.read())
                 auth_cache[token] = int(user_data['id'])
-        except Exception:
-            return jsonify({'success': False, 'error': 'Token Discord invalide ou expiré.'}), 401
+        except Exception as e:
+            print(f"❌ Erreur Token Discord : {e}")
+            return jsonify({'success': False, 'error': 'Token invalide.'}), 401
 
 # --- PING pour UptimeRobot ---
 @app_flask.route('/ping', methods=['GET', 'OPTIONS'])
