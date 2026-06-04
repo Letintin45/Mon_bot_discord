@@ -163,70 +163,65 @@ async def update_member_level_role(member: discord.Member, user_level: int):
 
 @tasks.loop(minutes=15)
 async def auto_sync_roles():
-    print("🔄 [SCAN] Début de la vérification des niveaux des joueurs...")
+    print("🔄 [SCAN] Début de la vérification des niveaux, VIP et richesses...")
     
     GUILD_ID = 1511382754615361626  # ID de ton serveur Discord
     guild = bot.get_guild(GUILD_ID)
     if not guild: return
     
     try:
-        # ÉTAPE 1 : On récupère tous les joueurs qui ont lié leur compte Discord
         players_resp = supabase_game.table('players').select('username, discord_id, game_state').not_.is_('discord_id', 'null').execute()
-        
         if not players_resp.data: return
         
-        max_levels = {}
+        player_stats = {} # Stockera { "discord_id": {"level": X, "money": Y, "vip": bool} }
         username_to_discord = {}
         
-        def extract_level(state):
+        def extract_stats(state):
             if isinstance(state, str):
                 try: state = json.loads(state)
-                except: return 1
+                except: return 1, 0.0, False
             if isinstance(state, dict):
-                lvl = state.get('level')
-                return int(lvl) if lvl is not None else 1
-            return 1
+                lvl = int(state.get('level', 1))
+                money = float(state.get('money', 0.0))
+                is_vip = state.get('vip', False) or state.get('is_vip', False)
+                return lvl, money, is_vip
+            return 1, 0.0, False
 
-        # On analyse les parties en cours (table players)
+        # Lecture des parties en cours
         for row in players_resp.data:
             d_id = str(row['discord_id'])
             username = row.get('username')
-            state = row.get('game_state', {})
+            lvl, money, is_vip = extract_stats(row.get('game_state', {}))
             
-            lvl = extract_level(state)
-            if d_id not in max_levels or lvl > max_levels[d_id]:
-                max_levels[d_id] = lvl
-                
+            player_stats[d_id] = {"level": lvl, "money": money, "vip": is_vip}
             if username:
-                # On mémorise quel pseudo correspond à quel ID Discord pour la suite
                 username_to_discord[username] = d_id
                 
-        # ÉTAPE 2 : On récupère toutes les autres sauvegardes en bloc (table saves)
+        # Lecture de toutes les sauvegardes
         usernames = list(username_to_discord.keys())
         if usernames:
-            # On demande à Supabase toutes les sauvegardes des pseudos trouvés
             saves_resp = supabase_game.table('saves').select('username, game_state').in_('username', usernames).execute()
-            
             for row in saves_resp.data:
                 username = row.get('username')
-                state = row.get('game_state', {})
-                d_id = username_to_discord.get(username) # On retrouve l'ID Discord via le pseudo
-                
+                d_id = username_to_discord.get(username)
                 if d_id:
-                    lvl = extract_level(state)
-                    if lvl > max_levels[d_id]:
-                        max_levels[d_id] = lvl
+                    lvl, money, is_vip = extract_stats(row.get('game_state', {}))
+                    # On garde les meilleures stats
+                    player_stats[d_id]["level"] = max(player_stats[d_id]["level"], lvl)
+                    player_stats[d_id]["money"] = max(player_stats[d_id]["money"], money)
+                    player_stats[d_id]["vip"] = player_stats[d_id]["vip"] or is_vip
                         
-        # ÉTAPE 3 : On distribue les rôles à tout le monde
+        # Distribution
         for member in guild.members:
             if member.bot: continue
-            member_id = str(member.id)
-            if member_id in max_levels:
-                await update_member_level_role(member, max_levels[member_id])
+            d_id = str(member.id)
+            if d_id in player_stats:
+                stats = player_stats[d_id]
+                await update_member_level_role(member, stats["level"])
+                await update_member_special_roles(member, stats["vip"], stats["money"])
                 
     except Exception as e:
         print(f"❌ Erreur lors de la synchronisation automatique: {e}")
-
 # ============================================================
 
 async def update_member_level_role(member: discord.Member, user_level: int):
@@ -296,6 +291,33 @@ def get_level(xp):
     while xp >= xp_for_level(n + 1):
         xp -= xp_for_level(n + 1); n += 1
     return n, xp
+
+
+async def update_member_special_roles(member: discord.Member, is_vip: bool, max_money: float):
+    # --- REMPLACE PAR TES VRAIS ID DE RÔLES DISCORD ---
+    ROLE_VIP_ID = 1512150055837241474  # ID du rôle 💎 VIP
+    ROLE_RICHE_ID = 1512090948992106516 # ID du rôle Riche (ex: Milliardaire)
+    
+    PALIER_RICHE = 1000000000  # Argent nécessaire pour le rôle Riche (Ici: 1 Milliard)
+
+    roles_to_add = []
+    
+    # 1. Vérification du rôle VIP
+    vip_role = member.guild.get_role(ROLE_VIP_ID)
+    if vip_role and is_vip and vip_role not in member.roles:
+        roles_to_add.append(vip_role)
+
+    # 2. Vérification du rôle Riche
+    riche_role = member.guild.get_role(ROLE_RICHE_ID)
+    if riche_role and max_money >= PALIER_RICHE and riche_role not in member.roles:
+        roles_to_add.append(riche_role)
+
+    # On donne les rôles au joueur s'il en a débloqué
+    if roles_to_add:
+        try:
+            await member.add_roles(*roles_to_add)
+        except Exception as e:
+            print(f"Impossible de donner les rôles spéciaux à {member.name} : {e}")
 
 # ============================================================
 # 2. TICKET VIEWS (Avec limite Max paramétrable)
@@ -941,14 +963,12 @@ async def on_raw_reaction_remove(payload):
 # ============================================================
 # 6. SETUP & CONFIGURATION (Commandes Slash)
 # ============================================================
-@bot.tree.command(name="sync", description="Synchronise tes rôles Discord avec ton niveau en jeu")
+@bot.tree.command(name="sync", description="Synchronise tes rôles Discord (Niveau, VIP, Richesse)")
 async def sync_roles(interaction: discord.Interaction):
     await interaction.response.defer() 
     
     try:
         discord_id_str = str(interaction.user.id)
-        
-        # ÉTAPE 1 : On cherche le joueur dans la table 'players'
         player_response = supabase_game.table('players').select('username, game_state').eq('discord_id', discord_id_str).execute()
         
         if not player_response.data:
@@ -959,38 +979,56 @@ async def sync_roles(interaction: discord.Interaction):
         username = player_data.get('username')
         active_state = player_data.get('game_state', {})
         
-        max_level = 1
-        
-        # Petite fonction interne pour extraire le niveau proprement
-        def extract_level(state):
+        # Petite fonction interne pour tout lire d'un coup (Niveau, Argent, VIP)
+        def extract_stats(state):
             if isinstance(state, str):
                 try: state = json.loads(state)
-                except: return 1
+                except: return 1, 0.0, False
             if isinstance(state, dict):
-                lvl = state.get('level')
-                return int(lvl) if lvl is not None else 1
-            return 1
+                lvl = int(state.get('level', 1))
+                money = float(state.get('money', 0.0))
+                # Vérifie la présence d'une clé 'vip' ou 'is_vip' à true
+                is_vip = state.get('vip', False) or state.get('is_vip', False)
+                return lvl, money, is_vip
+            return 1, 0.0, False
 
-        # On checke d'abord le niveau de la partie "en cours" (table players)
-        max_level = max(max_level, extract_level(active_state))
+        # Variables pour stocker le maximum de toutes les sauvegardes
+        max_level = 1
+        max_money = 0.0
+        has_vip = False
+
+        # 1. On lit la partie en cours (table players)
+        lvl, money, is_vip = extract_stats(active_state)
+        max_level = max(max_level, lvl)
+        max_money = max(max_money, money)
+        has_vip = has_vip or is_vip
         
-        # ÉTAPE 2 : On fouille la table 'saves' pour chercher les autres parties avec ce pseudo
+        # 2. On fouille les autres sauvegardes (table saves)
         if username:
             saves_response = supabase_game.table('saves').select('game_state').eq('username', username).execute()
             for row in saves_response.data:
                 save_state = row.get('game_state', {})
-                lvl = extract_level(save_state)
-                if lvl > max_level:
-                    max_level = lvl
+                lvl, money, is_vip = extract_stats(save_state)
+                max_level = max(max_level, lvl)
+                max_money = max(max_money, money)
+                has_vip = has_vip or is_vip
                     
-        # ÉTAPE 3 : On distribue le rôle !
+        # 3. On distribue les rôles de Niveau ET les rôles Spéciaux !
         await update_member_level_role(interaction.user, max_level)
-        await interaction.followup.send(f"✅ Rôles synchronisés ! Niveau max trouvé parmi toutes tes sauvegardes : **Niveau {max_level}**.")
+        await update_member_special_roles(interaction.user, has_vip, max_money)
+        
+        # 4. Message de succès personnalisé
+        msg = f"✅ Rôles synchronisés ! Niveau max : **Niveau {max_level}**."
+        if has_vip:
+            msg += "\n💎 **Statut VIP détecté !** Rôle attribué."
+        if max_money >= 1000000000:
+            msg += "\n💰 **Félicitations, tu es Milliardaire !** Rôle Riche attribué."
+            
+        await interaction.followup.send(msg)
         
     except Exception as e:
         print(f"❌ Erreur lors de la commande /sync : {e}")
         await interaction.followup.send(f"⚠️ Une erreur technique a empêché la synchronisation : `{e}`")
-
 
 @bot.tree.command(name="config-regles", description="Génère l'embed des règles.")
 @app_commands.default_permissions(administrator=True)
