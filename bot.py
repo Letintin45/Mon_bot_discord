@@ -684,6 +684,32 @@ async def setup_rules(interaction: discord.Interaction, salon: discord.TextChann
     c[gid].update({'rules_message_id': msg.id, 'rules_role_id': role.id})
     scfg(c)
 
+@bot.tree.command(name="config-exclure-salon", description="Exclure un salon du système d'XP.")
+@app_commands.default_permissions(administrator=True)
+async def exclude_channel(interaction: discord.Interaction, salon: discord.TextChannel):
+    c = cfg(); gid = str(interaction.guild.id)
+    if gid not in c: c[gid] = {}
+    if 'excluded_level_channels' not in c[gid]: c[gid]['excluded_level_channels'] = []
+    
+    if salon.id not in c[gid]['excluded_level_channels']:
+        c[gid]['excluded_level_channels'].append(salon.id)
+        scfg(c)
+        await interaction.response.send_message(f"✅ {salon.mention} est maintenant exclu du système d'XP.", ephemeral=True)
+    else:
+        await interaction.response.send_message(f"❌ {salon.mention} est déjà exclu.", ephemeral=True)
+
+@bot.tree.command(name="config-inclure-salon", description="Ré-inclure un salon dans le système d'XP.")
+@app_commands.default_permissions(administrator=True)
+async def include_channel(interaction: discord.Interaction, salon: discord.TextChannel):
+    c = cfg(); gid = str(interaction.guild.id)
+    if gid not in c: c[gid] = {}
+    if 'excluded_level_channels' in c[gid] and salon.id in c[gid]['excluded_level_channels']:
+        c[gid]['excluded_level_channels'].remove(salon.id)
+        scfg(c)
+        await interaction.response.send_message(f"✅ {salon.mention} est de nouveau inclus dans le système d'XP.", ephemeral=True)
+    else:
+        await interaction.response.send_message(f"❌ {salon.mention} n'était pas exclu.", ephemeral=True)
+
 @bot.tree.command(name="config-tickets", description="Installe le système de tickets.")
 @app_commands.default_permissions(administrator=True)
 async def setup_ticket(interaction: discord.Interaction, categorie: discord.CategoryChannel, salon: discord.TextChannel = None):
@@ -854,15 +880,6 @@ async def antispam(interaction: discord.Interaction):
     c[gid]['anti_spam'] = not c[gid].get('anti_spam', False); scfg(c)
     await interaction.response.send_message(f"🛡️ Anti-spam {'activé' if c[gid]['anti_spam'] else 'désactivé'}.", ephemeral=True)
 
-@bot.tree.command(name="config-banword", description="Ajoute un mot interdit (automod).")
-@app_commands.default_permissions(administrator=True)
-async def banword(interaction: discord.Interaction, mot: str):
-    c = cfg(); gid = str(interaction.guild.id)
-    if gid not in c: c[gid] = {}
-    bw = c[gid].get('banned_words', [])
-    if mot.lower() not in bw: bw.append(mot.lower())
-    c[gid]['banned_words'] = bw; scfg(c)
-    await interaction.response.send_message(f"✅ `{mot}` ajouté à l'automod.", ephemeral=True)
 
 # ============================================================
 # 7. MODÉRATION
