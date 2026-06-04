@@ -1656,6 +1656,20 @@ def get_config(guild_id):
 
 @app_flask.route('/api/config/<guild_id>', methods=['POST'])
 def update_config(guild_id):
+    # --- 🔒 VIGILE BACKEND (SÉCURITÉ ABSOLUE) ---
+    token = request.headers.get('Authorization', '').replace('Bearer ', '').strip()
+    user_id = auth_cache.get(token)
+    
+    guild = bot.get_guild(int(guild_id))
+    if not guild: 
+        return jsonify({'success': False, 'error': 'Serveur introuvable'}), 404
+        
+    member = guild.get_member(user_id)
+    # Si la personne n'est pas sur le serveur OU n'est pas Administrateur/Owner : DEHORS !
+    if not member or (guild.owner_id != user_id and not member.guild_permissions.administrator):
+        return jsonify({'success': False, 'error': 'Fraude détectée : Accès refusé.'}), 403
+    # --------------------------------------------
+
     c = cfg()
     if guild_id not in c: c[guild_id] = {}
 
