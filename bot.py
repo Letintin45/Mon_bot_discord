@@ -1571,6 +1571,8 @@ def api_test_rules(guild_id):
 @app_flask.route('/api/guilds', methods=['GET'])
 def get_guilds(): return jsonify([{'id': str(g.id), 'name': g.name, 'member_count': g.member_count} for g in bot.guilds])
 
+
+#NE SURTOUT PAS SUPPRIMER : C'est la route centrale pour récupérer et mettre à jour la configuration d'un serveur depuis le dashboard.
 @app_flask.route('/api/config/<guild_id>', methods=['GET'])
 def get_config(guild_id):
     return jsonify(cfg().get(guild_id, {}))
