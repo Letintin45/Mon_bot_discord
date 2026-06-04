@@ -180,10 +180,15 @@ async function populateSelects() {
 
     document.getElementById('autoRole').innerHTML = rOpt('auto_role');
     document.getElementById('levelRole').innerHTML = rOpt('');
+    // Injecte dans TOUS les menus
+    document.getElementById('ch_welcome').innerHTML = chOpt('welcome_channel');
+    document.getElementById('ch_leave').innerHTML = chOpt('leave_channel');
+    document.getElementById('ch_suggestions').innerHTML = chOpt('suggestion_channel');
 
     // ... à la fin de ta fonction populateSelects ...
     const exSelect = document.getElementById('excludedLevelChannels');
     const excluded = currentConfig.excluded_level_channels || []; // Liste des IDs déjà exclus
+    
 
     exSelect.innerHTML = guildChannels.map(c => 
         `<option value="${c.id}" ${excluded.includes(parseInt(c.id)) ? 'selected' : ''}>#${c.name}</option>`
