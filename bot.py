@@ -1207,6 +1207,21 @@ async def rank(interaction: discord.Interaction, membre: discord.Member = None):
     embed.add_field(name="Messages", value=f"**{data.get('messages', 0)}**")
     await interaction.response.send_message(embed=embed)
 
+@bot.tree.command(name="level-reset", description="Réinitialiser les niveaux et l'XP d'un membre.")
+@app_commands.default_permissions(administrator=True)
+async def reset_level(interaction: discord.Interaction, membre: discord.Member):
+    levels = lvl() # On récupère la base de données des niveaux
+    gid = str(interaction.guild.id)
+    uid = str(membre.id)
+    
+    if gid in levels and uid in levels[gid]:
+        # On remet tout à zéro
+        levels[gid][uid] = {'total_xp': 0, 'messages': 0}
+        slvl(levels) # On sauvegarde
+        await interaction.response.send_message(f"✅ Niveaux de {membre.mention} réinitialisés à 0.", ephemeral=True)
+    else:
+        await interaction.response.send_message("❌ Ce membre n'a pas encore gagné d'XP.", ephemeral=True)
+
 @bot.tree.command(name="leveltop", description="Top 10 des niveaux.")
 async def leveltop(interaction: discord.Interaction):
     levels = lvl(); gid = str(interaction.guild.id)
