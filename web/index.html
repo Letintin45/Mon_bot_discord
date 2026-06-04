@@ -199,18 +199,19 @@
         <button class="btn btn-success" style="margin-top:10px" onclick="addLevelRole()">+ Ajouter</button>
         <div id="levelRolesTable" style="margin-top:20px"></div>
       </div>
+      <div class="card">
+        <div class="card-title"><span>🔇</span> Exclusion des salons (Niveaux)</div>
+        <div class="form-group">
+            <label>Salons ignorés par le système d'XP</label>
+            <select id="excludedLevelChannels" multiple style="height:100px;"></select>
+            <div class="hint">Maintenez Ctrl pour en sélectionner plusieurs.</div>
+        </div>
+        <button class="btn btn-primary" onclick="saveExcludedChannels()">💾 Sauvegarder exclusions</button>
+      </div>
     </div>
   </div>
 
-  <div class="card">
-  <div class="card-title"><span>🔇</span> Exclusion des salons (Niveaux)</div>
-  <div class="form-group">
-      <label>Salons ignorés par le système d'XP</label>
-      <select id="excludedLevelChannels" multiple style="height:100px;"></select>
-      <div class="hint">Maintenez Ctrl pour en sélectionner plusieurs.</div>
-  </div>
-  <button class="btn btn-primary" onclick="saveExcludedChannels()">💾 Sauvegarder exclusions</button>
-</div>
+  
 
   <div id="page-automod" class="page">
     <div class="header"><div><h2>Automod</h2></div></div>
