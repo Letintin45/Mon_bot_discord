@@ -422,9 +422,14 @@ async def on_message(message):
         scfg(c)
         return
 
-    # 4. Système de Niveaux (avec exclusion de salons)
+    # 4. Système de Niveaux (avec exclusion de salons et commandes)
     excluded = gc.get('excluded_level_channels', [])
-    if message.channel.id not in excluded:
+    
+    # On vérifie que le message n'est pas une commande (commence par !, /, ?, -)
+    is_command = message.content.startswith(('!', '/', '?', '-'))
+    
+    # Si le salon n'est pas exclu ET que ce n'est pas une commande, on donne l'XP
+    if message.channel.id not in excluded and not is_command:
         levels = lvl()
         if gid not in levels: levels[gid] = {}
         if uid not in levels[gid]: levels[gid][uid] = {'xp': 0, 'total_xp': 0, 'messages': 0}
@@ -433,7 +438,6 @@ async def on_message(message):
         levels[gid][uid]['total_xp'] += gain
         levels[gid][uid]['messages'] = levels[gid][uid].get('messages', 0) + 1
         
-        # --- TOUT CE QUI SUIT DOIT ÊTRE DÉCALÉ DANS LE "IF" ---
         old_lvl, _ = get_level(levels[gid][uid]['total_xp'] - gain)
         new_lvl, _ = get_level(levels[gid][uid]['total_xp'])
         
@@ -1445,23 +1449,53 @@ async def eightball(interaction: discord.Interaction, question: str):
 @app_commands.choices(categorie=[
     app_commands.Choice(name="Setup", value="⚙️ Setup"),
     app_commands.Choice(name="Modération", value="🔨 Modération"),
-    app_commands.Choice(name="Conversations", value="💬 Conversations"),
     app_commands.Choice(name="Invitations", value="📨 Invitations"),
     app_commands.Choice(name="Économie", value="💰 Économie"),
     app_commands.Choice(name="Niveaux", value="⭐ Niveaux"),
-    app_commands.Choice(name="Fun", value="🎮 Fun"),
+    app_commands.Choice(name="Fun & Jeux", value="🎮 Fun & Jeux"),
     app_commands.Choice(name="Informations", value="ℹ️ Informations")
 ])
 async def aide_cmd(interaction: discord.Interaction, categorie: app_commands.Choice[str] = None):
     categories = {
-        "⚙️ Setup": [("`/config-regles`","Règles"),("`/config-tickets`","Tickets"),("`/config-bienvenue`","Bienvenue"),("`/config-depart`","Départ"),("`/config-logs`","Logs global"),("`/config-modlog`","Logs modération"),("`/config-suggestions`","Suggestions"),("`/config-levelup`","Level-up"),("`/config-autorole`","Auto-rôle"),("`/config-levelrole`","Rôle niveau"),("`/config-maxtickets`","Max tickets"),("`/config-antispam`","Anti-spam"),("`/config-banword`","Mot interdit")],
-        "🔨 Modération": [("`/ban`","Bannir"),("`/deban`","Débannir"),("`/expulser`","Expulser"),("`/mute`","Rendre muet"),("`/demute`","Démute"),("`/avertir`","Avertir"),("`/infractions-retirer`","Unwarn"),("`/infractions-lister`","Voir warns"),("`/infractions-reinitialiser`","Purger warns"),("`/slowmode`","Slowmode"),("`/lock`","Lock salon"),("`/unlock`","Unlock salon")],
-        "💬 Conversations": [("`/purge`","Supprimer des messages")],
-        "📨 Invitations": [("`/invites`","Invitations perso"),("`/topinvites`","Top inviteurs"),("`/invitations-reinitialiser`","Purger invitations")],
-        "💰 Économie": [("`/solde`","Solde"),("`/journalier`","Quotidien"),("`/travail`","Travailler"),("`/déposer`","Déposer"),("`/retirer`","Retirer"),("`/parier`","Parier"),("`/payer`","Donner"),("`/leaderboard`","Top économie")],
-        "⭐ Niveaux": [("`/rank`","Niveau"),("`/leveltop`","Top niveaux")],
-        "🎮 Fun": [("`/poll`","Sondage"),("`/giveaway`","Giveaway"),("`/rappel-creer`","Rappel"),("`/pile-face`","Pile/Face"),("`/roll`","Dés"),("`/8ball`","Magique")],
-        "ℹ️ Informations": [("`/embed`","Embed"),("`/userinfo`","Infos User"),("`/serverinfo`","Infos Serveur"),("`/avatar`","Avatar"),("`/ping`","Ping"),("`/note`","Ajouter Note"),("`/notes`","Mes Notes"),("`/envoyer`","Dire")],
+        "⚙️ Setup": [
+            ("`/config-regles`","Règles"),("`/config-tickets`","Tickets"),
+            ("`/config-bienvenue`","Bienvenue"),("`/config-depart`","Départ"),
+            ("`/config-logs`","Logs global"),("`/config-modlog`","Logs modération"),
+            ("`/config-suggestions`","Suggestions"),("`/config-levelup`","Level-up"),
+            ("`/config-autorole`","Auto-rôle"),("`/config-levelrole`","Rôle niveau"),
+            ("`/config-maxtickets`","Max tickets"),("`/config-antispam`","Anti-spam"),
+            ("`/config-mot-interdit`","Mot interdit"), ("`/config-exclure-salon`", "Exclure XP"),
+            ("`/config-inclure-salon`", "Inclure XP")
+        ],
+        "🔨 Modération": [
+            ("`/ban`","Bannir"),("`/deban`","Débannir"),("`/expulser`","Expulser"),
+            ("`/mute`","Rendre muet"),("`/demute`","Démute"),("`/avertir`","Avertir"),
+            ("`/infractions-retirer`","Unwarn"),("`/infractions-lister`","Voir warns"),
+            ("`/infractions-reinitialiser`","Purger warns"), ("`/purge`","Purger messages"),
+            ("`/slowmode`","Slowmode"),("`/lock`","Lock salon"),("`/unlock`","Unlock salon")
+        ],
+        "📨 Invitations": [
+            ("`/invites`","Invitations perso"),("`/topinvites`","Top inviteurs"),
+            ("`/invitations-reinitialiser`","Purger invitations")
+        ],
+        "💰 Économie": [
+            ("`/solde`","Solde"),("`/journalier`","Quotidien"),("`/travail`","Travailler"),
+            ("`/déposer`","Déposer"),("`/retirer`","Retirer"),("`/parier`","Parier"),
+            ("`/payer`","Donner"),("`/leaderboard`","Top économie")
+        ],
+        "⭐ Niveaux": [
+            ("`/rank`","Niveau"),("`/leveltop`","Top niveaux"),("`/level-reset`", "Reset niveau")
+        ],
+        "🎮 Fun & Jeux": [
+            ("`/poll`","Sondage"),("`/giveaway`","Giveaway"), ("`/aide-jeux`", "Guide des jeux"),
+            ("`/pile-face`","Pile/Face"),("`/roll`","Dés"),("`/8ball`","Magique")
+        ],
+        "ℹ️ Informations": [
+            ("`/rappel-creer`","Créer rappel"),("`/embed`","Embed personnalisé"),
+            ("`/userinfo`","Infos User"),("`/serverinfo`","Infos Serveur"),
+            ("`/avatar`","Avatar"),("`/ping`","Ping"),("`/note`","Ajouter Note"),
+            ("`/notes`","Mes Notes"),("`/envoyer`","Faire parler le bot")
+        ],
     }
     
     if categorie:
