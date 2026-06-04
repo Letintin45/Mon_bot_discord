@@ -1520,17 +1520,20 @@ app_flask = Flask(__name__)
 
 # ✅ CORS complet : Netlify + dev local
 CORS(app_flask,
-     resources={r"/*": {"origins": "*"}},
+     resources={r"/*": {"origins": ["https://admin-tycoon-bot-dashboard.netlify.app"]}},
      allow_headers=["Content-Type", "Authorization"],
      methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
      supports_credentials=False)
 
-# 🔐 Mot de passe dashboard
-DASHBOARD_PASSWORD = os.getenv('DASHBOARD_PASSWORD', 'admin123')
+import urllib.request
+import json
+
+# 🔐 Cache des connexions Discord
+auth_cache = {}
 
 @app_flask.after_request
 def after_request(response):
-    """Injecte les headers CORS sur TOUTES les réponses (y compris 401/500)."""
+    """Injecte les headers CORS sur TOUTES les réponses."""
     response.headers['Access-Control-Allow-Origin'] = '*'
     response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
     response.headers['Access-Control-Allow-Methods'] = 'GET, POST, PUT, DELETE, OPTIONS'
@@ -1538,17 +1541,28 @@ def after_request(response):
 
 @app_flask.before_request
 def require_auth():
-    # ✅ Pre-flight CORS : toujours laisser passer
     if request.method == 'OPTIONS':
         return '', 204
-    # Routes publiques
-    if request.path in ('/ping', '/api/login', '/api/debug'):
+        
+    if request.path in ('/ping', '/api/debug'):
         return
-    # ✅ Accepte le mot de passe brut OU "Bearer <pass>"
-    auth = request.headers.get('Authorization', '')
-    provided_pass = auth.replace('Bearer ', '').strip()
-    if provided_pass != DASHBOARD_PASSWORD:
-        return jsonify({'success': False, 'error': 'Non autorisé.'}), 401
+
+    auth_header = request.headers.get('Authorization', '')
+    token = auth_header.replace('Bearer ', '').strip()
+
+    if not token:
+        return jsonify({'success': False, 'error': 'Non autorisé. Connectez-vous avec Discord.'}), 401
+
+    # ✅ On demande à Discord "Qui est cette personne ?"
+    if token not in auth_cache:
+        req = urllib.request.Request("https://discord.com/api/users/@me")
+        req.add_header("Authorization", f"Bearer {token}")
+        try:
+            with urllib.request.urlopen(req) as response:
+                user_data = json.loads(response.read())
+                auth_cache[token] = int(user_data['id'])
+        except Exception:
+            return jsonify({'success': False, 'error': 'Token Discord invalide ou expiré.'}), 401
 
 # --- PING pour UptimeRobot ---
 @app_flask.route('/ping', methods=['GET', 'OPTIONS'])
@@ -1564,19 +1578,19 @@ def api_debug():
             'supabase': 'OK',
             'rows_config': len(res.data),
             'sample': [r['guild_id'] for r in res.data],
-            'bot_guilds': [str(g.id) for g in bot.guilds] if bot.is_ready() else [],
-            'password_set': bool(DASHBOARD_PASSWORD and DASHBOARD_PASSWORD != 'admin123')
+            'bot_guilds': [str(g.id) for g in bot.guilds] if bot.is_ready() else []
+            # La ligne du mot de passe a été supprimée !
         })
     except Exception as e:
         return jsonify({'supabase': 'ERREUR', 'detail': str(e)}), 500
-
+    
 @app_flask.route('/api/login', methods=['POST', 'OPTIONS'])
 def api_login():
     if request.method == 'OPTIONS': return '', 204
-    data = request.json or {}
-    if data.get('password') == DASHBOARD_PASSWORD:
-        return jsonify({'success': True})
-    return jsonify({'success': False, 'error': 'Mot de passe incorrect'}), 401
+    # Si le code arrive ici, c'est que require_auth a validé le token avec Discord !
+    token = request.headers.get('Authorization', '').replace('Bearer ', '').strip()
+    user_id = auth_cache.get(token)
+    return jsonify({'success': True, 'user_id': user_id})
 
 @app_flask.route('/api/test/welcome/<guild_id>', methods=['POST'])
 def api_test_welcome(guild_id):
@@ -1603,7 +1617,31 @@ def api_test_rules(guild_id):
     return jsonify({'success': True})
 
 @app_flask.route('/api/guilds', methods=['GET'])
-def get_guilds(): return jsonify([{'id': str(g.id), 'name': g.name, 'member_count': g.member_count} for g in bot.guilds])
+def get_guilds():
+    token = request.headers.get('Authorization', '').replace('Bearer ', '').strip()
+    user_id = auth_cache.get(token)
+
+    authorized_guilds = []
+    for guild in bot.guilds:
+        member = guild.get_member(user_id)
+        if member:
+            # 1. On détermine son grade
+            role = "user"
+            if guild.owner_id == user_id or member.guild_permissions.administrator:
+                role = "admin"
+            elif is_staff(member):
+                role = "modo"
+
+            # 2. S'il est staff, on lui donne accès au serveur avec son grade
+            if role != "user":
+                authorized_guilds.append({
+                    'id': str(guild.id),
+                    'name': guild.name,
+                    'member_count': guild.member_count,
+                    'role': role # <-- Le site web utilisera ça pour cacher certains menus !
+                })
+                
+    return jsonify(authorized_guilds)
 
 
 #NE SURTOUT PAS SUPPRIMER : C'est la route centrale pour récupérer et mettre à jour la configuration d'un serveur depuis le dashboard.
