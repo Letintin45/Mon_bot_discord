@@ -1532,8 +1532,9 @@ auth_cache = {}
 
 @app_flask.before_request
 def require_auth():
+    # 🟢 On retourne "None" au lieu de 204 pour laisser Flask-CORS faire son travail
     if request.method == 'OPTIONS':
-        return '', 204
+        return 
         
     if request.path in ('/ping', '/api/debug'):
         return
@@ -1578,10 +1579,9 @@ def api_debug():
     except Exception as e:
         return jsonify({'supabase': 'ERREUR', 'detail': str(e)}), 500
     
-@app_flask.route('/api/login', methods=['POST', 'OPTIONS'])
+@app_flask.route('/api/login', methods=['POST'])
 def api_login():
-    if request.method == 'OPTIONS': return '', 204
-    # Si le code arrive ici, c'est que require_auth a validé le token avec Discord !
+    # Plus de vérification manuelle OPTIONS ici, Flask-CORS gère tout !
     token = request.headers.get('Authorization', '').replace('Bearer ', '').strip()
     user_id = auth_cache.get(token)
     return jsonify({'success': True, 'user_id': user_id})
