@@ -343,43 +343,26 @@ async def on_invite_delete(invite): bot.invites_tracker[invite.guild.id] = await
 @bot.event
 async def on_message(message):
     if message.author.bot or not message.guild: return
-    c = cfg(); gid = str(message.guild.id); uid = str(message.author.id); gc = c.get(gid, {})
+    c = cfg(); gid = str(message.guild.id); gc = c.get(gid, {})
+    uid = str(message.author.id)
 
+    # 1. Stats globales
     s = stats()
     if gid not in s: s[gid] = {}
     s[gid]['messages_total'] = s[gid].get('messages_total', 0) + 1
     sstats(s)
 
-    banned = gc.get('banned_words', [])
-    if banned and any(w.lower() in message.content.lower() for w in banned):
-        try:
-            await message.delete()
-            m = await message.channel.send(embed=discord.Embed(description=f"🚫 {message.author.mention}, mot interdit.", color=discord.Color.red()))
-            await asyncio.sleep(5); await m.delete()
-        except: pass
-        return
-
-    # ── Système Anti-Mots Interdits ──
-    # On évite de censurer les Administrateurs
-    if not message.author.guild_permissions.administrator:
-        c = cfg()
-        gid = str(message.guild.id)
-        if gid in c and 'banned_words' in c[gid]:
-            banned_words = c[gid]['banned_words']
-            
-            # Nettoie le message (enlève les points, virgules, etc.) pour éviter de rater "mot!" ou "mot..."
-            import re
-            msg_clean = re.sub(r'[^\w\s]', '', message.content.lower())
-            msg_words = msg_clean.split()
-            
-            # Vérifie si un des mots du joueur est dans la liste rouge
-            if any(word in banned_words for word in msg_words):
-                try:
-                    await message.delete() # Supprime le message
-                    warn_msg = await message.channel.send(f"⚠️ {message.author.mention}, ton message a été supprimé car il contenait un mot interdit !", delete_after=5)
-                    return # On arrête la lecture du message ici
-                except Exception as e:
-                    print(f"Erreur Automod : {e}")
+    # 2. Automod (Mots interdits) - Unique et efficace
+    banned_words = gc.get('banned_words', [])
+    if banned_words:
+        # Regex pour matcher les mots entiers (\b) et ignorer la casse
+        content_lower = message.content.lower()
+        if any(re.search(r'\b' + re.escape(w.lower()) + r'\b', content_lower) for w in banned_words):
+            try:
+                await message.delete()
+                await message.channel.send(f"🚫 {message.author.mention}, message supprimé (mot interdit).", delete_after=5)
+                return # Arrête l'exécution ici
+            except: pass
 
     # ── Système de Suggestions ──
     if message.channel.id == gc.get('suggestion_channel'):
@@ -425,12 +408,16 @@ async def on_message(message):
         scfg(c)
         return
 
-    levels = lvl()
-    if gid not in levels: levels[gid] = {}
-    if uid not in levels[gid]: levels[gid][uid] = {'xp': 0, 'total_xp': 0, 'messages': 0}
-    gain = random.randint(15, 25)
-    levels[gid][uid]['total_xp'] += gain
-    levels[gid][uid]['messages'] = levels[gid][uid].get('messages', 0) + 1
+    # 4. Système de Niveaux (avec exclusion de salons)
+    excluded = gc.get('excluded_level_channels', [])
+    if message.channel.id not in excluded:
+        levels = lvl()
+        if gid not in levels: levels[gid] = {}
+        if uid not in levels[gid]: levels[gid][uid] = {'xp': 0, 'total_xp': 0, 'messages': 0}
+        
+        gain = random.randint(15, 25)
+        levels[gid][uid]['total_xp'] += gain
+        levels[gid][uid]['messages'] = levels[gid][uid].get('messages', 0) + 1
     old_lvl, _ = get_level(levels[gid][uid]['total_xp'] - gain)
     new_lvl, _ = get_level(levels[gid][uid]['total_xp'])
     if new_lvl > old_lvl:

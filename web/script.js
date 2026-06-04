@@ -287,6 +287,22 @@ async function saveSuggText() {
   toast('Textes des suggestions sauvegardés ! Refaites la commande /config-suggestions sur Discord.');
 }
 
+async function addDefaultWords() {
+    const mots = ["putain", "merde", "connard", "connasse", "salope", "salop", "enculé", "encule", "batard", "bâtard", "fdp", "tg", "ntm", "bite", "couille", "pute", "pd", "trouduc", "bouffon", "chier", "conne"];
+    let current = currentConfig.banned_words || [];
+    mots.forEach(m => { if(!current.includes(m)) current.push(m); });
+    await saveConfig({ banned_words: current });
+    renderBannedWords(current);
+    toast('Liste par défaut ajoutée !');
+}
+
+async function saveExcludedChannels() {
+    const select = document.getElementById('excludedLevelChannels');
+    const selected = Array.from(select.selectedOptions).map(option => parseInt(option.value));
+    await saveConfig({ excluded_level_channels: selected });
+    toast('Exclusions sauvegardées !');
+}
+
 async function saveAutoRole() {
   const val = document.getElementById('autoRole').value;
   if (val && val !== '') {
