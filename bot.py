@@ -378,6 +378,22 @@ async def on_message(message):
                 return # Arrête l'exécution ici
             except: pass
 
+    # --- NOUVEAU : 3. Anti-Pub (Liens Discord) ---
+    if "discord.gg/" in message.content.lower() or "discord.com/invite/" in message.content.lower():
+        # Si ce n'est pas un membre du staff ou un administrateur
+        if not is_staff(message.author) and not message.author.guild_permissions.administrator:
+            try:
+                await message.delete()
+                await message.channel.send(f"🚫 {message.author.mention}, la publicité pour d'autres serveurs est strictement interdite !", delete_after=8)
+                
+                # Envoi d'une alerte dans les logs de modération
+                embed_pub = discord.Embed(title="🚨 Tentative de Publicité", description=f"{message.author.mention} a essayé d'envoyer un lien d'invitation.", color=discord.Color.red(), timestamp=discord.utils.utcnow())
+                embed_pub.add_field(name="Salon", value=message.channel.mention)
+                embed_pub.add_field(name="Lien", value=message.content[:1000], inline=False)
+                await send_mod_log(message.guild, embed_pub)
+                return # Arrête l'exécution pour ne pas donner d'XP
+            except: pass
+
     # ── Système de Suggestions ──
     if message.channel.id == gc.get('suggestion_channel'):
         # On ignore les messages du bot (sinon il supprimerait ses propres messages en boucle)
@@ -513,6 +529,58 @@ async def _send_welcome(member, inviter, invite_code, gc):
         
     embed.set_footer(text=member.guild.name, icon_url=member.guild.icon.url if member.guild.icon else None)
     await ch.send(embed=embed)
+
+
+
+@bot.event
+async def on_message_delete(message):
+    if message.author.bot or not message.guild: return
+    
+    # Prépare l'embed de base
+    embed = discord.Embed(title="🗑️ Message Supprimé", color=discord.Color.red(), timestamp=discord.utils.utcnow())
+    embed.set_author(name=message.author, icon_url=message.author.display_avatar.url)
+    embed.add_field(name="Salon", value=message.channel.mention, inline=True)
+    
+    # 👻 Détection de Ghost Ping (S'il a mentionné quelqu'un d'autre que lui-même ou un bot)
+    if message.mentions:
+        mentions_str = " ".join([m.mention for m in message.mentions if not m.bot and m != message.author])
+        if mentions_str:
+            embed.title = "👻 Ghost Ping Détecté !"
+            embed.color = discord.Color.dark_orange()
+            embed.add_field(name="Mentions visées", value=mentions_str, inline=True)
+
+    content = message.content or "*(Message sans texte, potentiellement une image/embed)*"
+    if len(content) > 1024: content = content[:1020] + "..."
+    embed.add_field(name="Contenu", value=content, inline=False)
+    
+    await send_mod_log(message.guild, embed)
+
+@bot.event
+async def on_message_edit(before, after):
+    if before.author.bot or not before.guild: return
+    # On ignore si le texte est le même (souvent causé par l'apparition de l'aperçu d'un lien)
+    if before.content == after.content: return 
+    
+    embed = discord.Embed(title="✏️ Message Modifié", color=discord.Color.blue(), timestamp=discord.utils.utcnow())
+    embed.set_author(name=before.author, icon_url=before.author.display_avatar.url)
+    embed.add_field(name="Salon", value=before.channel.mention, inline=False)
+    
+    b_content = before.content if len(before.content) < 1000 else before.content[:1000] + "..."
+    a_content = after.content if len(after.content) < 1000 else after.content[:1000] + "..."
+    
+    embed.add_field(name="Avant", value=b_content or "*Vide*", inline=False)
+    embed.add_field(name="Après", value=a_content or "*Vide*", inline=False)
+    
+    # On ajoute un bouton pour sauter directement au message modifié !
+    view = discord.ui.View()
+    view.add_item(discord.ui.Button(label="Aller au message", url=after.jump_url))
+    
+    c = cfg(); mid = c.get(str(before.guild.id), {}).get('mod_log_channel')
+    ch = before.guild.get_channel(mid) if mid else None
+    if ch:
+        try: await ch.send(embed=embed, view=view)
+        except: pass
+
 
 @bot.event
 async def on_member_join(member):
