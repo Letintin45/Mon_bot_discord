@@ -181,8 +181,25 @@ async function populateSelects() {
     document.getElementById('autoRole').innerHTML = rOpt('auto_role');
     document.getElementById('levelRole').innerHTML = rOpt('');
 
+    // ... à la fin de ta fonction populateSelects ...
+    const exSelect = document.getElementById('excludedLevelChannels');
+    const excluded = currentConfig.excluded_level_channels || []; // Liste des IDs déjà exclus
+
+    exSelect.innerHTML = guildChannels.map(c => 
+        `<option value="${c.id}" ${excluded.includes(parseInt(c.id)) ? 'selected' : ''}>#${c.name}</option>`
+    ).join('');
+
     renderLevelRoles();
   } catch(e) {}
+}
+
+async function saveExcludedChannels() {
+    const select = document.getElementById('excludedLevelChannels');
+    // On récupère tous les IDs sélectionnés sous forme de tableau de nombres
+    const selected = Array.from(select.selectedOptions).map(option => parseInt(option.value));
+    
+    await saveConfig({ excluded_level_channels: selected });
+    toast('Exclusions mises à jour !');
 }
 
 async function createDiscordItem(type) {

@@ -346,6 +346,8 @@ async def on_message(message):
     c = cfg(); gid = str(message.guild.id); gc = c.get(gid, {})
     uid = str(message.author.id)
 
+    
+
     # 1. Stats globales
     s = stats()
     if gid not in s: s[gid] = {}
@@ -418,18 +420,22 @@ async def on_message(message):
         gain = random.randint(15, 25)
         levels[gid][uid]['total_xp'] += gain
         levels[gid][uid]['messages'] = levels[gid][uid].get('messages', 0) + 1
-    old_lvl, _ = get_level(levels[gid][uid]['total_xp'] - gain)
-    new_lvl, _ = get_level(levels[gid][uid]['total_xp'])
-    if new_lvl > old_lvl:
-        lvl_ch_id = gc.get('level_channel')
-        lvl_ch = message.guild.get_channel(lvl_ch_id) if lvl_ch_id else message.channel
-        embed = discord.Embed(description=f"🎉 {message.author.mention} vient d'atteindre le **niveau {new_lvl}** !", color=0xffd700)
-        await lvl_ch.send(embed=embed)
-        reward_id = gc.get('level_roles', {}).get(str(new_lvl))
-        if reward_id:
-            role = message.guild.get_role(reward_id)
-            if role: await message.author.add_roles(role)
-    slvl(levels)
+        
+        # --- TOUT CE QUI SUIT DOIT ÊTRE DÉCALÉ DANS LE "IF" ---
+        old_lvl, _ = get_level(levels[gid][uid]['total_xp'] - gain)
+        new_lvl, _ = get_level(levels[gid][uid]['total_xp'])
+        
+        if new_lvl > old_lvl:
+            lvl_ch_id = gc.get('level_channel')
+            lvl_ch = message.guild.get_channel(lvl_ch_id) if lvl_ch_id else message.channel
+            embed = discord.Embed(description=f"🎉 {message.author.mention} vient d'atteindre le **niveau {new_lvl}** !", color=0xffd700)
+            await lvl_ch.send(embed=embed)
+            reward_id = gc.get('level_roles', {}).get(str(new_lvl))
+            if reward_id:
+                role = message.guild.get_role(reward_id)
+                if role: await message.author.add_roles(role)
+        
+        slvl(levels)
 
     if gc.get('anti_spam'):
         if not hasattr(bot, '_spam_tracker'): bot._spam_tracker = {}
@@ -443,6 +449,8 @@ async def on_message(message):
                 m = await message.channel.send(f"⚠️ {message.author.mention} mute 1 minute pour spam.")
                 await asyncio.sleep(10); await m.delete()
             except: pass
+
+    
 
     await bot.process_commands(message)
 
