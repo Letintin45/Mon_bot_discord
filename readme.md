@@ -11,7 +11,6 @@ pip install -r requirements.txt
 ```env
 DISCORD_TOKEN=ton_token_ici
 OWNER_ID=ton_id_discord
-DASHBOARD_PORT=5000
 ```
 
 ## 🚀 Lancer le bot
@@ -22,10 +21,12 @@ python bot.py
 
 Le bot démarre + l'API dashboard sur `http://127.0.0.1:5000`
 
-## 🌐 Dashboard local
+## 🌐 Dashboard en ligne (GitHub Pages)
 
-Ouvre simplement `dashboard.html` dans ton navigateur (double-clic).
-**Le bot doit être lancé pour que le dashboard fonctionne.**
+Le dashboard est hébergé gratuitement et accessible en ligne à l'adresse suivante :
+`https://VOTRE-PSEUDO-GITHUB.github.io/NOM-DE-VOTRE-DEPOT/`
+
+*Le bot (hébergé sur Render) doit être en ligne pour que le dashboard puisse communiquer avec l'API.*
 
 ---
 
@@ -128,15 +129,6 @@ Utilise `/help ⚙️ Setup` (ou autre catégorie) pour le détail.
 
 ---
 
-## 📁 Fichiers de données
+## 📁 Stockage des Données
 
-| Fichier | Contenu |
-|---------|---------|
-| `config.json` | Configuration par serveur |
-| `economy.json` | Coins et banque des membres |
-| `levels.json` | XP et niveaux |
-| `warns.json` | Avertissements |
-| `invites.json` | Stats d'invitations |
-| `reminders.json` | Rappels actifs |
-| `stats.json` | Statistiques globales |
-| `notes.json` | Notes personnelles |
+Le bot n'utilise plus de fichiers JSON locaux. Toutes les données (Économie, Niveaux, Warns, Invitations) sont stockées en toute sécurité dans une base de données cloud **Supabase (PostgreSQL)** pour garantir une stabilité maximale et éviter toute perte de données.
