@@ -1559,20 +1559,15 @@ def api_test_rules(guild_id):
 @app_flask.route('/api/guilds', methods=['GET'])
 def get_guilds(): return jsonify([{'id': str(g.id), 'name': g.name, 'member_count': g.member_count} for g in bot.guilds])
 
-@app_flask.route('/api/config/<guild_id>', methods=['GET'])
-def get_config(guild_id): return jsonify(cfg().get(guild_id, {}))
-
 @app_flask.route('/api/config/<guild_id>', methods=['POST'])
 def update_config(guild_id):
     c = cfg()
     if guild_id not in c: c[guild_id] = {}
 
-    # Clés qui sont des IDs Discord (int obligatoire, ignorer si vide/0)
+    # Définition des types de données
     CHANNEL_KEYS = {'welcome_channel', 'leave_channel', 'log_channel', 'mod_log_channel',
                     'suggestion_channel', 'level_channel', 'ticket_category'}
     ROLE_KEYS = {'auto_role', 'rules_role_id'}
-    # Clés texte libre : accepter même si vide (on veut pouvoir effacer)
-    # Clés texte libre : accepter même si vide (on veut pouvoir effacer)
     TEXT_KEYS = {
         'rules_title', 'rules_text', 'welcome_title', 'welcome_message',
         'welcome_color', 'leave_message', 'leave_title',
@@ -1582,29 +1577,31 @@ def update_config(guild_id):
     }
 
     patch = {}
+    
     for k, v in request.json.items():
-        if v is None:
-            continue
+        if v is None: continue
 
+        # 1. Gestion des IDs Discord (Channels/Roles)
         if k in CHANNEL_KEYS or k in ROLE_KEYS:
-            # IDs Discord : seulement si non vide
-            if v == '' or v == 0 or v is False:
-                continue
-            try:
-                patch[k] = int(v)
-            except (ValueError, TypeError):
-                continue
+            if v == '' or v == 0 or v is False: continue
+            try: patch[k] = int(v)
+            except: continue
+            
+        # 2. Gestion des textes
         elif k in TEXT_KEYS:
-            # ✅ Champs texte : accepter même vide (pour pouvoir effacer)
             patch[k] = str(v)
-        elif isinstance(v, str) and v.strip() == '':
-            continue
+            
+        # 3. Gestion des Listes (Ex: excluded_level_channels)
+        elif isinstance(v, list):
+            patch[k] = v
+            
+        # 4. Autres (Integers, Booleans)
         else:
             patch[k] = v
 
     c[guild_id].update(patch)
     scfg(c)
-    print(f"✅ Config sauvegardée pour guild {guild_id} : {list(patch.keys())}")
+    print(f"✅ Config sauvegardée pour {guild_id} : {list(patch.keys())}")
     return jsonify({'success': True, 'config': c[guild_id]})
 
 @app_flask.route('/api/stats/<guild_id>')

@@ -98,6 +98,55 @@ async function loadGuild() {
   await populateSelects();
   await Promise.all([ loadStats(), loadCurrentConfig() ]);
 }
+async function populateSelects() {
+  try {
+    const [chRes, rRes, catRes] = await Promise.all([
+        fetch(`${API}/guild/${currentGuild}/channels`), 
+        fetch(`${API}/guild/${currentGuild}/roles`),
+        fetch(`${API}/guild/${currentGuild}/categories`)
+    ]);
+    guildChannels = await chRes.json();
+    guildRoles = await rRes.json();
+    const guildCats = await catRes.json();
+
+    const chOpt = (id) => `<option value="">Aucun</option>` + guildChannels.map(c => `<option value="${c.id}" ${id && currentConfig[id] && String(currentConfig[id]) === String(c.id) ? 'selected' : ''}>#${c.name}</option>`).join('');
+    const rOpt = (id) => `<option value="">Aucun</option>` + guildRoles.map(r => `<option value="${r.id}" ${id && currentConfig[id] && String(currentConfig[id]) === String(r.id) ? 'selected' : ''}>${r.name}</option>`).join('');
+    const catOpt = `<option value="">Aucune catégorie</option>` + guildCats.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+
+    document.getElementById('ch_welcome').innerHTML = chOpt('welcome_channel');
+    document.getElementById('ch_leave').innerHTML = chOpt('leave_channel');
+    document.getElementById('ch_logs').innerHTML = chOpt('log_channel');
+    document.getElementById('ch_modlog').innerHTML = chOpt('mod_log_channel');
+    document.getElementById('ch_suggestions').innerHTML = chOpt('suggestion_channel');
+    document.getElementById('ch_levels').innerHTML = chOpt('level_channel');
+
+    document.getElementById('msg_channel').innerHTML = chOpt('');
+    document.getElementById('poll_channel').innerHTML = chOpt('');
+    document.getElementById('rrChannel').innerHTML = chOpt('');
+    
+    if (document.getElementById('create_ch_cat')) {
+        document.getElementById('create_ch_cat').innerHTML = catOpt;
+    }
+
+    document.getElementById('autoRole').innerHTML = rOpt('auto_role');
+    document.getElementById('levelRole').innerHTML = rOpt('');
+    // Injecte dans TOUS les menus
+    document.getElementById('ch_welcome').innerHTML = chOpt('welcome_channel');
+    document.getElementById('ch_leave').innerHTML = chOpt('leave_channel');
+    document.getElementById('ch_suggestions').innerHTML = chOpt('suggestion_channel');
+
+    // ... à la fin de ta fonction populateSelects ...
+    const exSelect = document.getElementById('excludedLevelChannels');
+    const excluded = currentConfig.excluded_level_channels || []; // Liste des IDs déjà exclus
+    
+
+    exSelect.innerHTML = guildChannels.map(c => 
+        `<option value="${c.id}" ${excluded.includes(parseInt(c.id)) ? 'selected' : ''}>#${c.name}</option>`
+    ).join('');
+
+    renderLevelRoles();
+  } catch(e) {}
+}
 
 async function refreshAll() { await loadGuild(); toast('Données rafraîchies !'); }
 
@@ -148,55 +197,7 @@ async function loadCurrentConfig() {
   } catch(e) {}
 }
 
-async function populateSelects() {
-  try {
-    const [chRes, rRes, catRes] = await Promise.all([
-        fetch(`${API}/guild/${currentGuild}/channels`), 
-        fetch(`${API}/guild/${currentGuild}/roles`),
-        fetch(`${API}/guild/${currentGuild}/categories`)
-    ]);
-    guildChannels = await chRes.json();
-    guildRoles = await rRes.json();
-    const guildCats = await catRes.json();
 
-    const chOpt = (id) => `<option value="">Aucun</option>` + guildChannels.map(c => `<option value="${c.id}" ${id && currentConfig[id] && String(currentConfig[id]) === String(c.id) ? 'selected' : ''}>#${c.name}</option>`).join('');
-    const rOpt = (id) => `<option value="">Aucun</option>` + guildRoles.map(r => `<option value="${r.id}" ${id && currentConfig[id] && String(currentConfig[id]) === String(r.id) ? 'selected' : ''}>${r.name}</option>`).join('');
-    const catOpt = `<option value="">Aucune catégorie</option>` + guildCats.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
-
-    document.getElementById('ch_welcome').innerHTML = chOpt('welcome_channel');
-    document.getElementById('ch_leave').innerHTML = chOpt('leave_channel');
-    document.getElementById('ch_logs').innerHTML = chOpt('log_channel');
-    document.getElementById('ch_modlog').innerHTML = chOpt('mod_log_channel');
-    document.getElementById('ch_suggestions').innerHTML = chOpt('suggestion_channel');
-    document.getElementById('ch_levels').innerHTML = chOpt('level_channel');
-
-    document.getElementById('msg_channel').innerHTML = chOpt('');
-    document.getElementById('poll_channel').innerHTML = chOpt('');
-    document.getElementById('rrChannel').innerHTML = chOpt('');
-    
-    if (document.getElementById('create_ch_cat')) {
-        document.getElementById('create_ch_cat').innerHTML = catOpt;
-    }
-
-    document.getElementById('autoRole').innerHTML = rOpt('auto_role');
-    document.getElementById('levelRole').innerHTML = rOpt('');
-    // Injecte dans TOUS les menus
-    document.getElementById('ch_welcome').innerHTML = chOpt('welcome_channel');
-    document.getElementById('ch_leave').innerHTML = chOpt('leave_channel');
-    document.getElementById('ch_suggestions').innerHTML = chOpt('suggestion_channel');
-
-    // ... à la fin de ta fonction populateSelects ...
-    const exSelect = document.getElementById('excludedLevelChannels');
-    const excluded = currentConfig.excluded_level_channels || []; // Liste des IDs déjà exclus
-    
-
-    exSelect.innerHTML = guildChannels.map(c => 
-        `<option value="${c.id}" ${excluded.includes(parseInt(c.id)) ? 'selected' : ''}>#${c.name}</option>`
-    ).join('');
-
-    renderLevelRoles();
-  } catch(e) {}
-}
 
 async function saveExcludedChannels() {
     const select = document.getElementById('excludedLevelChannels');
