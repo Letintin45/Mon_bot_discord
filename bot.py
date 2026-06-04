@@ -11,6 +11,14 @@ ALLOWED_ROLE_IDS = {
     1507851921174561030, # Remplace par l'ID réel du rôle Administrateur
     1507852070089134170  # Remplace par l'ID réel du rôle Modérateur
 }
+# --- CONFIGURATION DES NIVEAUX ---
+# Remplace les valeurs par les vrais ID de tes rôles Discord (Clic droit > Copier l'ID)
+LEVEL_ROLES = {
+    15: 1512151369052717128, # 👑 Dieu du Système
+    10: 1512151165423456396, # 🎓 Ingénieur Réseau
+    5:  1512150982371446904, # 📈 Administrateur IT
+    1:  1507850671548792944  # 🖥️ Stagiaire IT
+}
 def is_staff(member):
     """Vérifie si le membre possède au moins un rôle autorisé."""
     user_roles = {role.id for role in member.roles}
@@ -103,6 +111,131 @@ def nts():    return _load('notes.json', {})
 def snts(d):  _save('notes.json', d)
 def inv():    return _load('invites.json', {})
 def sinv(d):  _save('invites.json', d)
+
+
+# ============================================================
+# 🎮 SYSTEME DE SYNCHRONISATION DES NIVEAUX DU JEU
+# ============================================================
+
+async def update_member_level_role(member: discord.Member, user_level: int):
+    """Vérifie le niveau max atteint et ajuste le rôle Discord de la personne."""
+    target_role_id = None
+    
+    # On cherche le palier de niveau le plus haut atteint par le joueur
+    for level_req, role_id in sorted(LEVEL_ROLES.items(), reverse=True):
+        if user_level >= level_req:
+            target_role_id = role_id
+            break
+            
+    if not target_role_id:
+        return
+
+    target_role = member.guild.get_role(int(target_role_id))
+    if not target_role or target_role in member.roles:
+        return # Le joueur a déjà le bon rôle ou le rôle n'existe pas
+
+    # On ajoute le nouveau grade prestigieux
+    await member.add_roles(target_role)
+    print(f"⭐ [PROMOTION] {member.name} obtient le rôle {target_role.name} (Niveau {user_level} max)")
+    
+    # Nettoyage des anciens rôles obsolètes de niveau inférieur ou supérieur
+    roles_to_remove = []
+    for level, role_id in LEVEL_ROLES.items():
+        if role_id != target_role_id:
+            old_role = member.guild.get_role(int(role_id))
+            if old_role and old_role in member.roles:
+                roles_to_remove.append(old_role)
+                
+    if roles_to_remove:
+        await member.remove_roles(*roles_to_remove)
+
+
+@tasks.loop(minutes=15)
+async def auto_sync_roles():
+    print("🔄 [SCAN] Début de la vérification des niveaux des joueurs...")
+    
+    GUILD_ID = 1511382754615361626  # Ton ID de serveur Discord
+    guild = bot.get_guild(GUILD_ID)
+    if not guild:
+        return
+    
+    try:
+        # On extrait toutes les sauvegardes qui possèdent un ID Discord lié
+        response = supabase.table('players').select('discord_id, game_state').not_.is_('discord_id', 'null').execute()
+        
+        # 🔥 RÉSOLUTION DU MULTI-SAUVEGARDES : 
+        # On calcule le niveau le plus haut pour chaque ID Discord unique
+        max_levels = {}
+        for row in response.data:
+            if not row.get('discord_id'): 
+                continue
+            d_id = str(row['discord_id'])
+            state = row.get('game_state', {})
+            
+            # On extrait proprement le niveau depuis le JSON game_state
+            level = state.get('level', 1) if isinstance(state, dict) else 1
+            
+            # Si l'ID n'est pas enregistré ou si cette partie a un niveau supérieur : on met à jour
+            if d_id not in max_levels or level > max_levels[d_id]:
+                max_levels[d_id] = level
+        
+        # On parcourt les membres connectés sur ton Discord pour appliquer les récompenses
+        for member in guild.members:
+            if member.bot: 
+                continue
+                
+            member_id = str(member.id)
+            if member_id in max_levels:
+                player_max_level = max_levels[member_id]
+                await update_member_level_role(member, player_max_level)
+                
+    except Exception as e:
+        print(f"❌ Erreur lors de la synchronisation automatique: {e}")
+
+# ============================================================
+
+async def update_member_level_role(member: discord.Member, user_level: int):
+    """
+    Vérifie le niveau du joueur et lui attribue le rôle correspondant,
+    tout en retirant les anciens rôles de niveau inférieurs.
+    """
+    # 1. On trouve quel rôle il mérite selon son niveau
+    target_role_id = None
+    
+    # On vérifie du plus haut au plus bas (si niv 12, il a le rôle 10)
+    for level_req, role_id in sorted(LEVEL_ROLES.items(), reverse=True):
+        if user_level >= level_req:
+            target_role_id = role_id
+            break
+            
+    if not target_role_id:
+        return # Le joueur n'a pas un niveau suffisant pour avoir un rôle
+
+    target_role = member.guild.get_role(target_role_id)
+    if not target_role:
+        print(f"Erreur: Le rôle avec l'ID {target_role_id} n'existe pas sur le serveur.")
+        return
+
+    # 2. Si le joueur a DÉJÀ le bon rôle, on ne fait rien pour éviter de spammer l'API Discord
+    if target_role in member.roles:
+        return
+
+    # 3. On lui donne le nouveau rôle
+    await member.add_roles(target_role)
+    print(f"Promotion ! {member.name} a reçu le rôle {target_role.name}")
+    
+    # 4. (Optionnel mais recommandé) On retire les anciens rôles de niveau
+    # Pour ne pas qu'il soit "Stagiaire" ET "Dieu du Système" en même temps
+    roles_to_remove = []
+    for level, role_id in LEVEL_ROLES.items():
+        if role_id != target_role_id: # On vérifie tous les rôles SAUF le nouveau
+            old_role = member.guild.get_role(role_id)
+            if old_role and old_role in member.roles:
+                roles_to_remove.append(old_role)
+                
+    if roles_to_remove:
+        await member.remove_roles(*roles_to_remove)
+
 
 # ── Envoi dans le salon de logs de modération ──
 async def send_log(guild, embed):
@@ -255,6 +388,8 @@ class TicketOpenerView(discord.ui.View):
         s[gid]['tickets_total'] = ticket_number
         sstats(s)
 
+
+
 # ============================================================
 # 3. BOT CLASS
 # ============================================================
@@ -335,16 +470,17 @@ async def find_inviter(guild, old_snapshot):
 # ============================================================
 @bot.event
 async def on_ready():
-    print(f'✅ {bot.user} connecté')
-    await bot.change_presence(activity=discord.Activity(type=discord.ActivityType.watching, name="Admin Tycoon 👑"))
-    for guild in bot.guilds:
-        bot.invites_tracker[guild.id] = await build_invite_snapshot(guild)
-    s = stats()
-    for guild in bot.guilds:
-        gid = str(guild.id)
-        if gid not in s: s[gid] = {}
-        s[gid]['bot_start'] = datetime.now(timezone.utc).isoformat()
-    sstats(s)
+    print(f"✅ Connecté en tant que {bot.user.name}")
+    try:
+        synced = await bot.tree.sync()
+        print(f"🔗 {len(synced)} commandes slash synchronisées.")
+    except Exception as e:
+        print(f"❌ Erreur de synchro : {e}")
+
+    # 👈 Lancement automatique de la boucle de synchronisation des rôles ici
+    if not auto_sync_roles.is_running():
+        auto_sync_roles.start()
+        print("🔄 Boucle automatique de synchronisation des rôles lancée (15 min).")
 
 @bot.event
 async def on_invite_create(invite): bot.invites_tracker[invite.guild.id] = await build_invite_snapshot(invite.guild)
@@ -770,6 +906,27 @@ async def on_raw_reaction_remove(payload):
 # ============================================================
 # 6. SETUP & CONFIGURATION (Commandes Slash)
 # ============================================================
+@bot.tree.command(name="sync", description="Synchronise tes rôles Discord avec ton niveau en jeu")
+async def sync_roles(interaction: discord.Interaction):
+    await interaction.response.defer() # Pour faire patienter Discord
+    
+    # 1. On cherche le joueur dans Supabase via son ID Discord
+    # (Adapte cette ligne selon comment tu as configuré ta requête Supabase)
+    user_data = supabase.table('users').select('level').eq('discord_id', str(interaction.user.id)).execute()
+    
+    if not user_data.data:
+        await interaction.followup.send("❌ Tu n'as pas encore créé de compte sur le jeu !")
+        return
+        
+    # 2. On récupère son niveau
+    player_level = user_data.data[0].get('level', 1)
+    
+    # 3. On lance la fonction de mise à jour !
+    await update_member_level_role(interaction.user, player_level)
+    
+    await interaction.followup.send(f"✅ Rôles synchronisés ! Tu es actuellement niveau {player_level}.")
+
+
 @bot.tree.command(name="config-regles", description="Génère l'embed des règles.")
 @app_commands.default_permissions(administrator=True)
 async def setup_rules(interaction: discord.Interaction, salon: discord.TextChannel, role: discord.Role):
