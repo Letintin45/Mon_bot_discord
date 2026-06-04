@@ -165,39 +165,64 @@ async def update_member_level_role(member: discord.Member, user_level: int):
 async def auto_sync_roles():
     print("🔄 [SCAN] Début de la vérification des niveaux des joueurs...")
     
-    GUILD_ID = 1511382754615361626  # Ton ID de serveur Discord
+    GUILD_ID = 1511382754615361626  # ID de ton serveur Discord
     guild = bot.get_guild(GUILD_ID)
-    if not guild:
-        return
+    if not guild: return
     
     try:
-        # On extrait toutes les sauvegardes qui possèdent un ID Discord lié
-        response = supabase_game.table('players').select('discord_id, game_state').not_.is_('discord_id', 'null').execute()        
-        # 🔥 RÉSOLUTION DU MULTI-SAUVEGARDES : 
-        # On calcule le niveau le plus haut pour chaque ID Discord unique
+        # ÉTAPE 1 : On récupère tous les joueurs qui ont lié leur compte Discord
+        players_resp = supabase_game.table('players').select('username, discord_id, game_state').not_.is_('discord_id', 'null').execute()
+        
+        if not players_resp.data: return
+        
         max_levels = {}
-        for row in response.data:
-            if not row.get('discord_id'): 
-                continue
+        username_to_discord = {}
+        
+        def extract_level(state):
+            if isinstance(state, str):
+                try: state = json.loads(state)
+                except: return 1
+            if isinstance(state, dict):
+                lvl = state.get('level')
+                return int(lvl) if lvl is not None else 1
+            return 1
+
+        # On analyse les parties en cours (table players)
+        for row in players_resp.data:
             d_id = str(row['discord_id'])
+            username = row.get('username')
             state = row.get('game_state', {})
             
-            # On extrait proprement le niveau depuis le JSON game_state
-            level = state.get('level', 1) if isinstance(state, dict) else 1
-            
-            # Si l'ID n'est pas enregistré ou si cette partie a un niveau supérieur : on met à jour
-            if d_id not in max_levels or level > max_levels[d_id]:
-                max_levels[d_id] = level
-        
-        # On parcourt les membres connectés sur ton Discord pour appliquer les récompenses
-        for member in guild.members:
-            if member.bot: 
-                continue
+            lvl = extract_level(state)
+            if d_id not in max_levels or lvl > max_levels[d_id]:
+                max_levels[d_id] = lvl
                 
+            if username:
+                # On mémorise quel pseudo correspond à quel ID Discord pour la suite
+                username_to_discord[username] = d_id
+                
+        # ÉTAPE 2 : On récupère toutes les autres sauvegardes en bloc (table saves)
+        usernames = list(username_to_discord.keys())
+        if usernames:
+            # On demande à Supabase toutes les sauvegardes des pseudos trouvés
+            saves_resp = supabase_game.table('saves').select('username, game_state').in_('username', usernames).execute()
+            
+            for row in saves_resp.data:
+                username = row.get('username')
+                state = row.get('game_state', {})
+                d_id = username_to_discord.get(username) # On retrouve l'ID Discord via le pseudo
+                
+                if d_id:
+                    lvl = extract_level(state)
+                    if lvl > max_levels[d_id]:
+                        max_levels[d_id] = lvl
+                        
+        # ÉTAPE 3 : On distribue les rôles à tout le monde
+        for member in guild.members:
+            if member.bot: continue
             member_id = str(member.id)
             if member_id in max_levels:
-                player_max_level = max_levels[member_id]
-                await update_member_level_role(member, player_max_level)
+                await update_member_level_role(member, max_levels[member_id])
                 
     except Exception as e:
         print(f"❌ Erreur lors de la synchronisation automatique: {e}")
@@ -918,33 +943,51 @@ async def on_raw_reaction_remove(payload):
 # ============================================================
 @bot.tree.command(name="sync", description="Synchronise tes rôles Discord avec ton niveau en jeu")
 async def sync_roles(interaction: discord.Interaction):
-    # On dit à Discord de patienter
     await interaction.response.defer() 
     
     try:
-        # 1. On cherche toutes les sauvegardes de ce joueur grâce à son ID Discord
-        response = supabase_game.table('players').select('game_state').eq('discord_id', str(interaction.user.id)).execute()        
-        if not response.data:
+        discord_id_str = str(interaction.user.id)
+        
+        # ÉTAPE 1 : On cherche le joueur dans la table 'players'
+        player_response = supabase_game.table('players').select('username, game_state').eq('discord_id', discord_id_str).execute()
+        
+        if not player_response.data:
             await interaction.followup.send("❌ Aucun compte trouvé ! Va sur le jeu et clique sur **🔗 Rôles Discord** d'abord.")
             return
             
-        # 2. On calcule son niveau maximum parmi toutes ses sauvegardes
-        max_level = 1
-        for row in response.data:
-            state = row.get('game_state', {})
-            # On vérifie que state est bien un dictionnaire avant de lire le niveau
-            level = state.get('level', 1) if isinstance(state, dict) else 1
-            if level > max_level:
-                max_level = level
-                
-        # 3. On lance la fonction pour lui donner le rôle
-        await update_member_level_role(interaction.user, max_level)
+        player_data = player_response.data[0]
+        username = player_data.get('username')
+        active_state = player_data.get('game_state', {})
         
-        # 4. Message de succès final
-        await interaction.followup.send(f"✅ Rôles synchronisés avec succès ! Tu es niveau {max_level}.")
+        max_level = 1
+        
+        # Petite fonction interne pour extraire le niveau proprement
+        def extract_level(state):
+            if isinstance(state, str):
+                try: state = json.loads(state)
+                except: return 1
+            if isinstance(state, dict):
+                lvl = state.get('level')
+                return int(lvl) if lvl is not None else 1
+            return 1
+
+        # On checke d'abord le niveau de la partie "en cours" (table players)
+        max_level = max(max_level, extract_level(active_state))
+        
+        # ÉTAPE 2 : On fouille la table 'saves' pour chercher les autres parties avec ce pseudo
+        if username:
+            saves_response = supabase_game.table('saves').select('game_state').eq('username', username).execute()
+            for row in saves_response.data:
+                save_state = row.get('game_state', {})
+                lvl = extract_level(save_state)
+                if lvl > max_level:
+                    max_level = lvl
+                    
+        # ÉTAPE 3 : On distribue le rôle !
+        await update_member_level_role(interaction.user, max_level)
+        await interaction.followup.send(f"✅ Rôles synchronisés ! Niveau max trouvé parmi toutes tes sauvegardes : **Niveau {max_level}**.")
         
     except Exception as e:
-        # S'il y a le moindre plantage, le bot l'affichera ici au lieu de bloquer 1 minute !
         print(f"❌ Erreur lors de la commande /sync : {e}")
         await interaction.followup.send(f"⚠️ Une erreur technique a empêché la synchronisation : `{e}`")
 
