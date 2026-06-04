@@ -1304,6 +1304,108 @@ async def lb(interaction: discord.Interaction):
         except: pass
     await interaction.response.send_message(embed=embed)
 
+@bot.tree.command(name="shop", description="Affiche la boutique du serveur.")
+async def shop(interaction: discord.Interaction):
+    embed = discord.Embed(title="🛒 Boutique du Serveur", description="Utilisez `/buy [article]` pour acheter un objet avec vos pièces (🪙).", color=0xffd700)
+    embed.add_field(name="[1] Couleur Rouge 🔴", value="Prix: **10,000** 🪙\n*Donne une couleur rouge à ton pseudo.*", inline=False)
+    embed.add_field(name="[2] Couleur Bleue 🔵", value="Prix: **10,000** 🪙\n*Donne une couleur bleue à ton pseudo.*", inline=False)
+    embed.add_field(name="[3] Rôle Riche 💎", value="Prix: **50,000** 🪙\n*Montre à tout le monde ta richesse légendaire.*", inline=False)
+    embed.add_field(name="[4] Ticket de Loterie 🎟️", value="Prix: **500** 🪙\n*Un ticket pour le prochain tirage au sort !*", inline=False)
+    
+    if interaction.guild.icon:
+        embed.set_thumbnail(url=interaction.guild.icon.url)
+    await interaction.response.send_message(embed=embed)
+
+@bot.tree.command(name="buy", description="Acheter un article dans la boutique.")
+@app_commands.choices(article=[
+    app_commands.Choice(name="1 - Couleur Rouge (10k 🪙)", value=1),
+    app_commands.Choice(name="2 - Couleur Bleue (10k 🪙)", value=2),
+    app_commands.Choice(name="3 - Rôle Riche (50k 🪙)", value=3),
+    app_commands.Choice(name="4 - Ticket de Loterie (500 🪙)", value=4)
+])
+async def buy(interaction: discord.Interaction, article: app_commands.Choice[int]):
+    gid = str(interaction.guild.id)
+    uid = str(interaction.user.id)
+    e, wallet = get_wallet(gid, uid)
+    
+    # ⚙️ CONFIGURATION DES RÔLES (À remplacer par tes vrais IDs)
+    ROLE_ROUGE_ID = 1512092336509816952
+    ROLE_BLEU_ID = 1512092117353234482
+    ROLE_RICHE_ID = 1512090948992106516 # <- Mets l'ID de ton rôle Riche ici
+    
+    articles = {
+        1: {"nom": "Couleur Rouge", "prix": 10000, "role_id": ROLE_ROUGE_ID, "type": "couleur"},
+        2: {"nom": "Couleur Bleue", "prix": 10000, "role_id": ROLE_BLEU_ID, "type": "couleur"},
+        3: {"nom": "Rôle Riche", "prix": 50000, "role_id": ROLE_RICHE_ID, "type": "role"},
+        4: {"nom": "Ticket de Loterie", "prix": 500, "role_id": None, "type": "item"}
+    }
+    
+    choix = articles[article.value]
+    
+    # 1. Vérification de l'argent du joueur
+    if wallet['coins'] < choix['prix']:
+        return await interaction.response.send_message(f"❌ Tu n'as pas assez d'argent ! Il te faut **{choix['prix']}** 🪙 dans ton portefeuille.", ephemeral=True)
+        
+    # 2. On retire l'argent
+    e[gid][uid]['coins'] -= choix['prix']
+    seco(e)
+    
+    # 3A. Si c'est une Couleur
+    if choix['type'] == "couleur":
+        role = interaction.guild.get_role(choix['role_id'])
+        if not role:
+            e[gid][uid]['coins'] += choix['prix'] # Remboursement
+            seco(e)
+            return await interaction.response.send_message("❌ Cette couleur n'est pas encore configurée par le Fondateur. Tu as été remboursé.", ephemeral=True)
+            
+        if role in interaction.user.roles:
+            e[gid][uid]['coins'] += choix['prix'] # Remboursement
+            seco(e)
+            return await interaction.response.send_message(f"❌ Tu possèdes déjà la **{choix['nom']}** ! Tu as été remboursé.", ephemeral=True)
+            
+        try:
+            # On retire l'ancienne couleur achetée si le joueur change d'avis
+            couleurs_possibles = [interaction.guild.get_role(ROLE_ROUGE_ID), interaction.guild.get_role(ROLE_BLEU_ID)]
+            roles_a_retirer = [r for r in couleurs_possibles if r and r in interaction.user.roles]
+            if roles_a_retirer:
+                await interaction.user.remove_roles(*roles_a_retirer)
+                
+            await interaction.user.add_roles(role)
+            await interaction.response.send_message(f"🎨 Félicitations {interaction.user.mention} ! Ton pseudo est maintenant équipé de la **{choix['nom']}** !")
+        except discord.Forbidden:
+            e[gid][uid]['coins'] += choix['prix']
+            seco(e)
+            await interaction.response.send_message("❌ Erreur : Mon rôle de bot est placé trop bas. (Tu as été remboursé)", ephemeral=True)
+
+    # 3B. Si c'est le Rôle Riche
+    elif choix['type'] == "role":
+        role = interaction.guild.get_role(choix['role_id'])
+        if not role:
+            e[gid][uid]['coins'] += choix['prix']
+            seco(e)
+            return await interaction.response.send_message("❌ Ce rôle n'est pas encore configuré. Tu as été remboursé.", ephemeral=True)
+            
+        if role in interaction.user.roles:
+            e[gid][uid]['coins'] += choix['prix']
+            seco(e)
+            return await interaction.response.send_message(f"❌ Tu es déjà **{choix['nom']}** ! Tu as été remboursé.", ephemeral=True)
+            
+        try:
+            await interaction.user.add_roles(role)
+            await interaction.response.send_message(f"💎 Félicitations {interaction.user.mention} ! Tu es maintenant officiellement **{choix['nom']}** !")
+        except discord.Forbidden:
+            e[gid][uid]['coins'] += choix['prix']
+            seco(e)
+            await interaction.response.send_message("❌ Erreur : Mon rôle de bot est placé trop bas. (Tu as été remboursé)", ephemeral=True)
+
+    # 3C. Si c'est un ticket de loterie
+    elif choix['type'] == "item":
+        n = nts() 
+        if uid not in n: n[uid] = []
+        n[uid].append({'texte': f'🎟️ {choix["nom"]} (Shop)', 'time': str(discord.utils.utcnow())})
+        snts(n)
+        await interaction.response.send_message(f"🎟️ Tu as acheté un **{choix['nom']}** pour {choix['prix']} 🪙 !\n*(Tu peux voir tes tickets en tapant `/notes`)*")
+
 # ============================================================
 # 10. LEVELS
 # ============================================================
@@ -1556,7 +1658,8 @@ async def aide_cmd(interaction: discord.Interaction, categorie: app_commands.Cho
         "💰 Économie": [
             ("`/solde`","Solde"),("`/journalier`","Quotidien"),("`/travail`","Travailler"),
             ("`/déposer`","Déposer"),("`/retirer`","Retirer"),("`/parier`","Parier"),
-            ("`/payer`","Donner"),("`/leaderboard`","Top économie")
+            ("`/payer`","Donner"),("`/leaderboard`","Top économie"),
+            ("`/shop`","Voir la boutique"),("`/buy`","Acheter un article")
         ],
         "⭐ Niveaux": [
             ("`/rank`","Niveau"),("`/leveltop`","Top niveaux"),("`/level-reset`", "Reset niveau")
