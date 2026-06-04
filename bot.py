@@ -1727,9 +1727,9 @@ import json
 
 app_flask = Flask(__name__)
 
-# ✅ CORS géré uniquement par Flask-CORS (Supprime les conflits de double-vérification)
+# ✅ CORS géré uniquement par Flask-CORS
 CORS(app_flask,
-     resources={r"/*": {"origins": ["https://admin-tycoon-bot-dashboard.netlify.app"]}},
+     resources={r"/*": {"origins": ["https://letintin45.github.io"]}},
      allow_headers=["Content-Type", "Authorization"],
      methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
      supports_credentials=False)
@@ -1756,7 +1756,7 @@ def require_auth():
         req = urllib.request.Request("https://discord.com/api/users/@me")
         req.add_header("Authorization", f"Bearer {token}")
         # ⚠️ INDISPENSABLE : Discord bloque les requêtes sans "User-Agent" !
-        req.add_header("User-Agent", "AdminTycoonBot (https://admin-tycoon-bot-dashboard.netlify.app, 1.0)")
+        req.add_header("User-Agent", "AdminTycoonBot (https://letintin45.github.io, 1.0)")
         
         try:
             with urllib.request.urlopen(req) as response:
