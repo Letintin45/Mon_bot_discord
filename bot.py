@@ -128,37 +128,32 @@ def sinv(d):  _save('invites.json', d)
 # 🎮 SYSTEME DE SYNCHRONISATION DES NIVEAUX DU JEU
 # ============================================================
 
-async def update_member_level_role(member: discord.Member, user_level: int):
-    """Vérifie le niveau max atteint et ajuste le rôle Discord de la personne."""
-    target_role_id = None
-    
-    # On cherche le palier de niveau le plus haut atteint par le joueur
-    for level_req, role_id in sorted(LEVEL_ROLES.items(), reverse=True):
-        if user_level >= level_req:
-            target_role_id = role_id
-            break
-            
-    if not target_role_id:
-        return
 
-    target_role = member.guild.get_role(int(target_role_id))
-    if not target_role or target_role in member.roles:
-        return # Le joueur a déjà le bon rôle ou le rôle n'existe pas
-
-    # On ajoute le nouveau grade prestigieux
-    await member.add_roles(target_role)
-    print(f"⭐ [PROMOTION] {member.name} obtient le rôle {target_role.name} (Niveau {user_level} max)")
+async def update_member_special_roles(member: discord.Member, is_vip: bool, max_money: float):
+    # --- REMPLACE PAR TES VRAIS ID DE RÔLES DISCORD ---
+    ROLE_VIP_ID = 1512150055837241474  # ID du rôle 💎 VIP
+    ROLE_RICHE_ID = 1512090948992106516 # ID du rôle Riche (ex: Milliardaire)
     
-    # Nettoyage des anciens rôles obsolètes de niveau inférieur ou supérieur
-    roles_to_remove = []
-    for level, role_id in LEVEL_ROLES.items():
-        if role_id != target_role_id:
-            old_role = member.guild.get_role(int(role_id))
-            if old_role and old_role in member.roles:
-                roles_to_remove.append(old_role)
-                
-    if roles_to_remove:
-        await member.remove_roles(*roles_to_remove)
+    PALIER_RICHE = 1000000000  # Argent nécessaire pour le rôle Riche (Ici: 1 Milliard)
+
+    roles_to_add = []
+    
+    # 1. Vérification du rôle VIP
+    vip_role = member.guild.get_role(ROLE_VIP_ID)
+    if vip_role and is_vip and vip_role not in member.roles:
+        roles_to_add.append(vip_role)
+
+    # 2. Vérification du rôle Riche
+    riche_role = member.guild.get_role(ROLE_RICHE_ID)
+    if riche_role and max_money >= PALIER_RICHE and riche_role not in member.roles:
+        roles_to_add.append(riche_role)
+
+    # On donne les rôles au joueur s'il en a débloqué
+    if roles_to_add:
+        try:
+            await member.add_roles(*roles_to_add)
+        except Exception as e:
+            print(f"Impossible de donner les rôles spéciaux à {member.name} : {e}")
 
 
 @tasks.loop(minutes=15)
@@ -293,31 +288,6 @@ def get_level(xp):
     return n, xp
 
 
-async def update_member_special_roles(member: discord.Member, is_vip: bool, max_money: float):
-    # --- REMPLACE PAR TES VRAIS ID DE RÔLES DISCORD ---
-    ROLE_VIP_ID = 1512150055837241474  # ID du rôle 💎 VIP
-    ROLE_RICHE_ID = 1512090948992106516 # ID du rôle Riche (ex: Milliardaire)
-    
-    PALIER_RICHE = 1000000000  # Argent nécessaire pour le rôle Riche (Ici: 1 Milliard)
-
-    roles_to_add = []
-    
-    # 1. Vérification du rôle VIP
-    vip_role = member.guild.get_role(ROLE_VIP_ID)
-    if vip_role and is_vip and vip_role not in member.roles:
-        roles_to_add.append(vip_role)
-
-    # 2. Vérification du rôle Riche
-    riche_role = member.guild.get_role(ROLE_RICHE_ID)
-    if riche_role and max_money >= PALIER_RICHE and riche_role not in member.roles:
-        roles_to_add.append(riche_role)
-
-    # On donne les rôles au joueur s'il en a débloqué
-    if roles_to_add:
-        try:
-            await member.add_roles(*roles_to_add)
-        except Exception as e:
-            print(f"Impossible de donner les rôles spéciaux à {member.name} : {e}")
 
 # ============================================================
 # 2. TICKET VIEWS (Avec limite Max paramétrable)
@@ -848,8 +818,9 @@ async def on_member_join(member):
 
 @bot.event
 async def on_member_remove(member):
-    c = cfg(); gid = str(member.id) # Gid est redéfini juste en bas, attention
-    gid = str(member.guild.id); gc = c.get(gid, {})
+    c = cfg()
+    gid = str(member.guild.id)
+    gc = c.get(gid, {})
     
     # 1. ANTI-LEAVER : Retirer l'invitation si le membre avait été compté
     jm = joined_members()
