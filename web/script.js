@@ -3,7 +3,7 @@ const fragment = new URLSearchParams(window.location.hash.slice(1));
 const accessToken = fragment.get('access_token');
 if (accessToken) {
     localStorage.setItem('discord_token', accessToken);
-    window.history.replaceState(null, null, window.location.pathname); // Nettoie l'URL
+    window.history.replaceState(null, null, window.location.pathname); 
 }
 
 const API = 'https://admin-tycoon-bot-2spd.onrender.com/api';
@@ -12,11 +12,11 @@ let guildChannels = [];
 let guildRoles = [];
 let currentConfig = {};
 let rrPairs = [];
-let guildsData = []; // Stocke les infos des serveurs et les grades
+let guildsData = []; 
 
 const originalFetch = window.fetch;
 
-// 2. INTERCEPTEUR : Ajoute le token Discord à toutes les requêtes vers le bot
+// 2. INTERCEPTEUR : Ajoute le token Discord aux requêtes
 window.fetch = async function() {
     let [resource, config] = arguments;
     if(config === undefined) config = {};
@@ -27,6 +27,35 @@ window.fetch = async function() {
     
     return await originalFetch(resource, config);
 };
+
+// --- FONCTIONS UTILITAIRES (Elles avaient disparu !) ---
+function toast(msg, type = 'success') {
+    const t = document.getElementById('toast');
+    if(!t) return;
+    t.textContent = msg;
+    t.style.background = type === 'error' ? '#ff3366' : '#00cc66';
+    t.className = 'show';
+    setTimeout(() => t.className = t.className.replace('show', ''), 3000);
+}
+
+function showPage(pageId, elem = null) {
+    document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+    const page = document.getElementById('page-' + pageId);
+    if (page) page.classList.add('active');
+
+    document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+    if (elem) {
+        elem.classList.add('active');
+    } else {
+        document.querySelectorAll('.nav-item').forEach(n => {
+            if (n.getAttribute('onclick') && n.getAttribute('onclick').includes(`'${pageId}'`)) {
+                n.classList.add('active');
+            }
+        });
+    }
+    localStorage.setItem('activeTab', pageId);
+}
+// --------------------------------------------------------
 
 // 3. INITIALISATION & CONNEXION
 async function init() {
@@ -45,11 +74,12 @@ async function init() {
       await loadGuild();
       
       const active = localStorage.getItem('activeTab') || 'overview';
-      showPage(active, null);
+      showPage(active, null); // C'est ici que ça crashait !
     } else {
       toast("Vous n'êtes Administrateur/Modérateur sur aucun serveur avec ce bot.", "error");
     }
   } catch (e) {
+    console.error("Erreur critique:", e);
     document.getElementById('botName').textContent = 'Hors ligne';
     document.getElementById('statusDot').classList.add('offline');
     document.getElementById('apiUrlDisplay').textContent = 'API injoignable';
@@ -59,25 +89,21 @@ async function init() {
   }
 }
 
-// 4. GESTION DES PERMISSIONS (Masquer les menus pour les Modos)
+// 4. GESTION DES PERMISSIONS
 function applyPermissions() {
-    const currentGuildData = guildsData.find(g => g.id === currentGuild);
+    const currentGuildData = guildsData.find(g => String(g.id) === String(currentGuild));
     if (!currentGuildData) return;
 
-    const role = currentGuildData.role; // 'admin' ou 'modo'
+    const role = currentGuildData.role; 
     const adminOnlyItems = document.querySelectorAll('.admin-only'); 
     
     if (role === 'modo') {
-        // Cache les menus de configuration
         adminOnlyItems.forEach(el => el.style.display = 'none');
-        
-        // Si le modo essaie d'afficher une page admin en bidouillant le HTML, on le ramène à l'accueil
         const adminTabs = ['welcome', 'rules', 'channels', 'roles', 'automod', 'reactionroles', 'create'];
         if (adminTabs.includes(localStorage.getItem('activeTab'))) {
             showPage('overview');
         }
     } else {
-        // Affiche tout pour l'Administrateur/Owner
         adminOnlyItems.forEach(el => el.style.display = 'block');
     }
 }
@@ -87,8 +113,7 @@ async function loadGuild() {
   currentGuild = document.getElementById('guildSelect').value;
   if (!currentGuild) return;
 
-  applyPermissions(); // 🟢 On applique les permissions dynamiques !
-
+  applyPermissions(); 
   await loadCurrentConfig(); 
   await populateSelects();
   await loadStats();
