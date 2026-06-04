@@ -137,7 +137,19 @@ class TicketClosedView(discord.ui.View):
 
     @discord.ui.button(label="Reopen", style=discord.ButtonStyle.success, custom_id="ticket_reopen", emoji="🔓")
     async def reopen(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await interaction.response.send_message(f"🔓 Ticket réouvert par {interaction.user.mention}")
+        await interaction.response.defer()
+        
+        # On recrée un embed pour annoncer la réouverture
+        embed = discord.Embed(
+            title="🔓 Ticket Réouvert", 
+            description=f"Le ticket a été réouvert par {interaction.user.mention}.", 
+            color=discord.Color.green()
+        )
+        
+        # On renvoie le message AVEC les boutons du ticket actif (Claim / Close)
+        await interaction.channel.send(embed=embed, view=TicketActiveView())
+        
+        # On supprime l'ancien message de fermeture
         await interaction.message.delete()
 
     @discord.ui.button(label="Delete", style=discord.ButtonStyle.danger, custom_id="ticket_delete", emoji="🗑️")

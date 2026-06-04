@@ -94,10 +94,19 @@ async function init() {
 async function loadGuild() {
   currentGuild = document.getElementById('guildSelect').value;
   if (!currentGuild) return;
-  // populateSelects doit finir AVANT loadCurrentConfig pour que les selects soient remplis
+
+  // 1. IL FAUT CHARGER LA CONFIGURATION EN PREMIER
+  // Comme ça, le bot sait quels salons étaient déjà sauvegardés.
+  await loadCurrentConfig(); 
+  
+  // 2. ENSUITE ON REMPLIT LES MENUS
+  // Le script va utiliser la config chargée juste au-dessus pour mettre "selected" au bon endroit.
   await populateSelects();
-  await Promise.all([ loadStats(), loadCurrentConfig() ]);
+  
+  // 3. Et enfin on charge les stats
+  await loadStats();
 }
+
 async function populateSelects() {
   try {
     const [chRes, rRes, catRes] = await Promise.all([
