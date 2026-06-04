@@ -1406,6 +1406,35 @@ async def buy(interaction: discord.Interaction, article: app_commands.Choice[int
         snts(n)
         await interaction.response.send_message(f"🎟️ Tu as acheté un **{choix['nom']}** pour {choix['prix']} 🪙 !\n*(Tu peux voir tes tickets en tapant `/notes`)*")
 
+
+# --- ADMIN : GESTION ÉCONOMIE ---
+@bot.tree.command(name="eco-add", description="Ajouter des coins à un membre (Admin uniquement).")
+@app_commands.default_permissions(administrator=True)
+async def eco_add(interaction: discord.Interaction, membre: discord.Member, montant: int):
+    gid = str(interaction.guild.id)
+    uid = str(membre.id)
+    # On récupère le portefeuille
+    e, wallet = get_wallet(gid, uid)
+    
+    # On ajoute le montant
+    e[gid][uid]['coins'] += montant
+    seco(e)
+    
+    await interaction.response.send_message(f"✅ Ajouté **{montant}** 🪙 à {membre.mention}.", ephemeral=True)
+
+@bot.tree.command(name="eco-remove", description="Retirer des coins à un membre (Admin uniquement).")
+@app_commands.default_permissions(administrator=True)
+async def eco_remove(interaction: discord.Interaction, membre: discord.Member, montant: int):
+    gid = str(interaction.guild.id)
+    uid = str(membre.id)
+    e, wallet = get_wallet(gid, uid)
+    
+    # On retire le montant
+    e[gid][uid]['coins'] = max(0, e[gid][uid]['coins'] - montant)
+    seco(e)
+    
+    await interaction.response.send_message(f"✅ Retiré **{montant}** 🪙 à {membre.mention}.", ephemeral=True)
+
 # ============================================================
 # 10. LEVELS
 # ============================================================
