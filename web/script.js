@@ -1,94 +1,97 @@
-const API = 'https://admin-tycoon-bot-2spd.onrender.com/api'; // CHANGER ICI PAR L'URL DISCLOUD QUAND LE BOT SERA HÉBERGÉ
+// 1. GESTION DU TOKEN DISCORD AU CHARGEMENT DE LA PAGE
+const fragment = new URLSearchParams(window.location.hash.slice(1));
+const accessToken = fragment.get('access_token');
+if (accessToken) {
+    localStorage.setItem('discord_token', accessToken);
+    window.history.replaceState(null, null, window.location.pathname); // Nettoie l'URL
+}
+
+const API = 'https://admin-tycoon-bot-2spd.onrender.com/api';
 let currentGuild = null;
 let guildChannels = [];
 let guildRoles = [];
 let currentConfig = {};
 let rrPairs = [];
+let guildsData = []; // Stocke les infos des serveurs et les grades
 
 const originalFetch = window.fetch;
 
-// 1. On intercepte TOUTES les requêtes API pour y glisser le mot de passe
+// 2. INTERCEPTEUR : Ajoute le token Discord à toutes les requêtes vers le bot
 window.fetch = async function() {
     let [resource, config] = arguments;
     if(config === undefined) config = {};
     if(config.headers === undefined) config.headers = {};
-    config.headers['Authorization'] = localStorage.getItem('dash_pass') || '';
+    
+    const token = localStorage.getItem('discord_token');
+    if (token) config.headers['Authorization'] = 'Bearer ' + token;
+    
     return await originalFetch(resource, config);
 };
 
-// 2. La fonction de connexion
-async function tryLogin() {
-    const pass = document.getElementById('loginPass').value;
-    localStorage.setItem('dash_pass', pass);
-    const res = await fetch(`${API}/login`, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({password: pass})});
-    
-    if(res.ok) {
-        document.getElementById('loginOverlay').style.display = 'none';
-        init(); // Lance le dashboard
-    } else {
-        alert("❌ Mot de passe incorrect !");
-        localStorage.removeItem('dash_pass');
-    }
-}
-
-function toast(msg, type = 'success') {
-  const t = document.getElementById('toast');
-  t.textContent = (type === 'success' ? '✅ ' : '❌ ') + msg;
-  t.className = `show ${type}`;
-  setTimeout(() => { t.className = ''; }, 3000);
-}
-
-function showPage(name, el = null) {
-  localStorage.setItem('activeTab', name);
-  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
-  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
-  
-  document.getElementById('page-' + name).classList.add('active');
-  
-  if(el) {
-      el.classList.add('active');
-  } else {
-      let items = document.querySelectorAll('.nav-item');
-      items.forEach(i => { if(i.getAttribute('onclick').includes(name)) i.classList.add('active'); });
-  }
-
-  if (currentGuild) {
-    if (name === 'overview') loadStats();
-    if (name === 'warns') loadWarns();
-    if (name === 'economy') loadEconomy();
-    if (name === 'invites') { 
-        loadInvites(); 
-        loadJoinedMembers(); 
-    }
-    if (name === 'reactionroles') { populateSelects(); loadReactionRoles(); }
-    if (name === 'channels' || name === 'roles' || name === 'automod' || name === 'messages' || name === 'create') populateSelects();
-    if (name === 'welcome' || name === 'rules') loadCurrentConfig();
-  }
-}
-
+// 3. INITIALISATION & CONNEXION
 async function init() {
   try {
     const res = await fetch(`${API}/guilds`);
-    const guilds = await res.json();
+    if (!res.ok) throw new Error("Non autorisé");
+    
+    guildsData = await res.json();
     const sel = document.getElementById('guildSelect');
-    sel.innerHTML = guilds.map(g => `<option value="${g.id}">${g.name} (${g.member_count} membres)</option>`).join('');
+    sel.innerHTML = guildsData.map(g => `<option value="${g.id}">${g.name} (${g.member_count} membres)</option>`).join('');
 
-    if (guilds.length > 0) {
-      currentGuild = guilds[0].id;
-      document.getElementById('botName').textContent = 'Bot connecté ✓';
+    if (guildsData.length > 0) {
+      document.getElementById('botName').textContent = 'Connecté avec Discord ✓';
       document.getElementById('statusDot').classList.remove('offline');
-      document.getElementById('apiUrlDisplay').textContent = API.replace('/api', '');
+      document.getElementById('apiUrlDisplay').textContent = 'Accès sécurisé';
       await loadGuild();
       
       const active = localStorage.getItem('activeTab') || 'overview';
       showPage(active, null);
+    } else {
+      toast("Vous n'êtes Administrateur/Modérateur sur aucun serveur avec ce bot.", "error");
     }
   } catch (e) {
     document.getElementById('botName').textContent = 'Hors ligne';
     document.getElementById('statusDot').classList.add('offline');
     document.getElementById('apiUrlDisplay').textContent = 'API injoignable';
-    toast('Impossible de se connecter à l\'API.', 'error');
+    toast('Session expirée ou non connecté.', 'error');
+    localStorage.removeItem('discord_token');
+    document.getElementById('loginOverlay').style.display = 'flex';
   }
+}
+
+// 4. GESTION DES PERMISSIONS (Masquer les menus pour les Modos)
+function applyPermissions() {
+    const currentGuildData = guildsData.find(g => g.id === currentGuild);
+    if (!currentGuildData) return;
+
+    const role = currentGuildData.role; // 'admin' ou 'modo'
+    const adminOnlyItems = document.querySelectorAll('.admin-only'); 
+    
+    if (role === 'modo') {
+        // Cache les menus de configuration
+        adminOnlyItems.forEach(el => el.style.display = 'none');
+        
+        // Si le modo essaie d'afficher une page admin en bidouillant le HTML, on le ramène à l'accueil
+        const adminTabs = ['welcome', 'rules', 'channels', 'roles', 'automod', 'reactionroles', 'create'];
+        if (adminTabs.includes(localStorage.getItem('activeTab'))) {
+            showPage('overview');
+        }
+    } else {
+        // Affiche tout pour l'Administrateur/Owner
+        adminOnlyItems.forEach(el => el.style.display = 'block');
+    }
+}
+
+// 5. CHARGEMENT DU SERVEUR
+async function loadGuild() {
+  currentGuild = document.getElementById('guildSelect').value;
+  if (!currentGuild) return;
+
+  applyPermissions(); // 🟢 On applique les permissions dynamiques !
+
+  await loadCurrentConfig(); 
+  await populateSelects();
+  await loadStats();
 }
 
 async function loadGuild() {
@@ -541,15 +544,17 @@ document.addEventListener('DOMContentLoaded', async () => {
   ['welcomeTitle', 'welcomeMessage', 'welcomeColor', 'welcomeShowInviter'].forEach(id => { document.getElementById(id)?.addEventListener('input', updatePreview); });
   rrPairs = []; renderRRPairs();
   
-  // Vérifie si un mot de passe est déjà enregistré
-  if(localStorage.getItem('dash_pass')) {
-      const res = await fetch(`${API}/login`, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({password: localStorage.getItem('dash_pass')})});
-      if(res.ok) {
-          const overlay = document.getElementById('loginOverlay');
-          if(overlay) overlay.style.display = 'none';
+  // Vérifie si un token Discord est présent
+  if (localStorage.getItem('discord_token')) {
+      const res = await fetch(`${API}/login`, {method: 'POST'});
+      if (res.ok) {
+          document.getElementById('loginOverlay').style.display = 'none';
           init();
       } else {
-          localStorage.removeItem('dash_pass');
+          localStorage.removeItem('discord_token');
+          document.getElementById('loginOverlay').style.display = 'flex';
       }
+  } else {
+      document.getElementById('loginOverlay').style.display = 'flex';
   }
 });
