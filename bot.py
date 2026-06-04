@@ -2041,6 +2041,81 @@ def create_discord():
 def get_joined_members(guild_id):
     return jsonify(joined_members().get(guild_id, {}))
 
+# --- GESTIONNAIRE DE MEMBRES (ADMIN DASHBOARD) ---
+@app_flask.route('/api/guild/<guild_id>/members', methods=['GET'])
+def api_guild_members(guild_id):
+    token = request.headers.get('Authorization', '').replace('Bearer ', '').strip()
+    user_id = auth_cache.get(token)
+    guild = bot.get_guild(int(guild_id))
+    if not guild: return jsonify([])
+    
+    member = guild.get_member(user_id)
+    # Vérification de sécurité absolue :
+    if not member or (guild.owner_id != user_id and not member.guild_permissions.administrator and not is_staff(member)):
+        return jsonify([])
+
+    e = eco().get(str(guild_id), {})
+    l = lvl().get(str(guild_id), {})
+    w = wrn().get(str(guild_id), {})
+
+    members_data = []
+    for m in guild.members:
+        if not m.bot:
+            uid = str(m.id)
+            user_eco = e.get(uid, {'coins': 0, 'bank': 0})
+            user_lvl = l.get(uid, {'total_xp': 0})
+            user_warns = w.get(uid, [])
+            
+            members_data.append({
+                'id': uid,
+                'name': m.name,
+                'avatar': m.display_avatar.url,
+                'coins': user_eco.get('coins', 0) + user_eco.get('bank', 0),
+                'xp': user_lvl.get('total_xp', 0),
+                'warns': len(user_warns)
+            })
+    return jsonify(members_data)
+
+@app_flask.route('/api/admin/action', methods=['POST'])
+def api_admin_action():
+    token = request.headers.get('Authorization', '').replace('Bearer ', '').strip()
+    user_id = auth_cache.get(token)
+    data = request.json
+    gid = str(data.get('guild_id'))
+    uid = str(data.get('user_id'))
+    action = data.get('action')
+    amount = int(data.get('amount', 0))
+    
+    guild = bot.get_guild(int(gid))
+    if not guild: return jsonify({'success': False})
+    
+    member = guild.get_member(user_id)
+    if not member or (guild.owner_id != user_id and not member.guild_permissions.administrator and not is_staff(member)):
+        return jsonify({'success': False, 'error': 'Accès refusé'})
+
+    if action in ['add_eco', 'remove_eco']:
+        e, wallet = get_wallet(gid, uid)
+        if action == 'add_eco': e[gid][uid]['coins'] += amount
+        else: e[gid][uid]['coins'] = max(0, e[gid][uid]['coins'] - amount)
+        seco(e)
+        
+    elif action in ['add_xp', 'remove_xp']:
+        levels = lvl()
+        if gid not in levels: levels[gid] = {}
+        if uid not in levels[gid]: levels[gid][uid] = {'total_xp': 0, 'messages': 0}
+        if action == 'add_xp': levels[gid][uid]['total_xp'] += amount
+        else: levels[gid][uid]['total_xp'] = max(0, levels[gid][uid]['total_xp'] - amount)
+        slvl(levels)
+        
+    elif action == 'clear_warns':
+        w = wrn()
+        if gid in w and uid in w[gid]:
+            w[gid][uid] = []
+            swrn(w)
+            
+    return jsonify({'success': True})
+
+
 # /!\ TRÈS IMPORTANT : Le host est 0.0.0.0 pour l'hébergement web /!\
 # Tout à la fin de bot.py
 def run_flask():

@@ -108,31 +108,15 @@ function applyPermissions() {
     }
 }
 
-// 5. CHARGEMENT DU SERVEUR
 async function loadGuild() {
   currentGuild = document.getElementById('guildSelect').value;
   if (!currentGuild) return;
 
-  applyPermissions(); 
-  await loadCurrentConfig(); 
-  await populateSelects();
-  await loadStats();
-}
-
-async function loadGuild() {
-  currentGuild = document.getElementById('guildSelect').value;
-  if (!currentGuild) return;
-
-  // 1. IL FAUT CHARGER LA CONFIGURATION EN PREMIER
-  // Comme ça, le bot sait quels salons étaient déjà sauvegardés.
-  await loadCurrentConfig(); 
-  
-  // 2. ENSUITE ON REMPLIT LES MENUS
-  // Le script va utiliser la config chargée juste au-dessus pour mettre "selected" au bon endroit.
-  await populateSelects();
-  
-  // 3. Et enfin on charge les stats
-  await loadStats();
+  applyPermissions();          // Gardé (de la fonction 1)
+  await loadCurrentConfig();   // Gardé (Doit être en premier comme le disait la fonction 2)
+  await populateSelects();     // Gardé
+  await loadStats();           // Gardé
+  await loadMembersList();     // Gardé (de la fonction 1)
 }
 
 async function populateSelects() {
@@ -564,6 +548,83 @@ async function saveConfig(d) {
 function checkApi() {
   window.open(`${API}/debug`, '_blank');
 }
+
+// --- 👥 SYSTÈME GESTIONNAIRE DE MEMBRES ---
+let allMembersData = [];
+let selectedMemberId = null;
+
+async function loadMembersList() {
+  const container = document.getElementById('membersListContainer');
+  try {
+    const res = await fetch(`${API}/guild/${currentGuild}/members`);
+    allMembersData = await res.json();
+    renderMembersList(allMembersData);
+  } catch (e) {
+    container.innerHTML = "Erreur de chargement.";
+  }
+}
+
+function renderMembersList(list) {
+  const c = document.getElementById('membersListContainer');
+  c.innerHTML = list.map(m => `
+    <div style="display: flex; align-items: center; gap: 10px; padding: 10px; background: #111; border-radius: 6px; margin-bottom: 8px; cursor: pointer; border: 1px solid transparent; transition: 0.2s;"
+         onmouseover="this.style.borderColor='#5865F2'" onmouseout="this.style.borderColor='transparent'"
+         onclick="selectMember('${m.id}')">
+      <img src="${m.avatar}" style="width: 32px; height: 32px; border-radius: 50%;">
+      <div style="font-size: 14px; font-weight: 500;">${m.name}</div>
+    </div>
+  `).join('');
+}
+
+function filterMembers() {
+  const q = document.getElementById('memberSearch').value.toLowerCase();
+  const filtered = allMembersData.filter(m => m.name.toLowerCase().includes(q) || m.id.includes(q));
+  renderMembersList(filtered);
+}
+
+function selectMember(id) {
+  selectedMemberId = id;
+  const m = allMembersData.find(x => x.id === id);
+  if (!m) return;
+  document.getElementById('memberDetailsPanel').style.display = 'block';
+  document.getElementById('m_avatar').src = m.avatar;
+  document.getElementById('m_name').textContent = m.name;
+  document.getElementById('m_id').textContent = m.id;
+  document.getElementById('m_coins').textContent = m.coins + " 🪙";
+  document.getElementById('m_xp').textContent = m.xp + " XP";
+  document.getElementById('m_warns').textContent = m.warns;
+}
+
+async function adminAction(action) {
+  if (!selectedMemberId) return toast('Aucun membre sélectionné', 'error');
+  const amount = parseInt(document.getElementById('m_amount').value) || 0;
+  
+  if (action !== 'clear_warns' && amount <= 0) return toast('Montant invalide', 'error');
+
+  try {
+    const res = await fetch(`${API}/admin/action`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ guild_id: currentGuild, user_id: selectedMemberId, action, amount })
+    });
+    const data = await res.json();
+    if (data.success) {
+      toast('✅ Action effectuée avec succès !');
+      document.getElementById('m_amount').value = '';
+      
+      // On rafraîchit tout en fond pour mettre à jour l'affichage !
+      await loadMembersList(); 
+      selectMember(selectedMemberId); 
+      loadEconomy();
+      loadWarns();
+    } else {
+      toast(data.error || 'Erreur API', 'error');
+    }
+  } catch (e) {
+    toast('Erreur de connexion', 'error');
+  }
+}
+
 
 document.addEventListener('DOMContentLoaded', async () => {
   ['welcomeTitle', 'welcomeMessage', 'welcomeColor', 'welcomeShowInviter'].forEach(id => { document.getElementById(id)?.addEventListener('input', updatePreview); });
