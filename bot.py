@@ -223,44 +223,43 @@ async def auto_sync_roles():
 
 async def update_member_level_role(member: discord.Member, user_level: int):
     """
-    Vérifie le niveau du joueur et lui attribue le rôle correspondant.
-    - 🖥️ Stagiaire IT  : rôle permanent, jamais supprimé
-    - 📈 Administrateur IT : supprimé à l'obtention de 🎓 Ingénieur Réseau
-    - 🎓 Ingénieur Réseau  : supprimé à l'obtention de 👑 Dieu du Système
+    Vérifie le niveau du joueur et lui attribue le rôle correspondant,
+    tout en retirant les anciens rôles de niveau inférieurs.
     """
-    STAGIAIRE_ROLE_ID = 1507850671548792944  # 🖥️ Stagiaire IT — jamais retiré
-
-    # 1. On trouve quel rôle il mérite selon son niveau (du plus haut au plus bas)
+    # 1. On trouve quel rôle il mérite selon son niveau
     target_role_id = None
+    
+    # On vérifie du plus haut au plus bas (si niv 12, il a le rôle 10)
     for level_req, role_id in sorted(LEVEL_ROLES.items(), reverse=True):
         if user_level >= level_req:
             target_role_id = role_id
             break
-
+            
     if not target_role_id:
-        return  # Niveau insuffisant pour tout rôle
+        return # Le joueur n'a pas un niveau suffisant pour avoir un rôle
 
     target_role = member.guild.get_role(target_role_id)
     if not target_role:
         print(f"Erreur: Le rôle avec l'ID {target_role_id} n'existe pas sur le serveur.")
         return
 
-    # 2. On donne le rôle cible s'il ne l'a pas déjà
-    if target_role not in member.roles:
-        await member.add_roles(target_role)
-        print(f"Promotion ! {member.name} a reçu le rôle {target_role.name}")
+    # 2. Si le joueur a DÉJÀ le bon rôle, on ne fait rien pour éviter de spammer l'API Discord
+    if target_role in member.roles:
+        return
 
-    # 3. On retire les anciens rôles SAUF le Stagiaire IT (rôle permanent)
+    # 3. On lui donne le nouveau rôle
+    await member.add_roles(target_role)
+    print(f"Promotion ! {member.name} a reçu le rôle {target_role.name}")
+    
+    # 4. (Optionnel mais recommandé) On retire les anciens rôles de niveau
+    # Pour ne pas qu'il soit "Stagiaire" ET "Dieu du Système" en même temps
     roles_to_remove = []
     for level, role_id in LEVEL_ROLES.items():
-        if role_id == target_role_id:
-            continue  # On garde le nouveau rôle
-        if role_id == STAGIAIRE_ROLE_ID:
-            continue  # On garde toujours le Stagiaire IT
-        old_role = member.guild.get_role(role_id)
-        if old_role and old_role in member.roles:
-            roles_to_remove.append(old_role)
-
+        if role_id != target_role_id: # On vérifie tous les rôles SAUF le nouveau
+            old_role = member.guild.get_role(role_id)
+            if old_role and old_role in member.roles:
+                roles_to_remove.append(old_role)
+                
     if roles_to_remove:
         await member.remove_roles(*roles_to_remove)
 
@@ -2350,36 +2349,34 @@ def api_admin_action():
     return jsonify({'success': True})
 
 # ==========================================
-# API FLASK (DASHBOARD) - A METTRE TOUT EN BAS AVANT bot.run()
+# ROUTES JEU (Leaderboard dashboard)
 # ==========================================
 
-app = Flask(__name__)
-CORS(app)
-
-@app.route('/api/game_players', methods=['GET'])
+@app_flask.route('/api/game_players', methods=['GET'])
 def get_game_players():
-    pwd = request.headers.get('Authorization')
-    if pwd != os.getenv("DASHBOARD_PASSWORD"):
-        return jsonify({"error": "Unauthorized"}), 401
-    
+    if not supabase_game:
+        return jsonify({"error": "Supabase JEU non configuré (SUPABASE_GAME_URL manquant sur Render)"}), 503
     try:
         res = supabase_game.table('players').select('username, game_state, is_excluded').execute()
         players = res.data
-        players.sort(key=lambda x: x.get('game_state', {}).get('money', 0), reverse=True)
+        def safe_money(p):
+            state = p.get('game_state', {})
+            if isinstance(state, str):
+                try: state = json.loads(state)
+                except: return 0
+            return state.get('money', 0) if isinstance(state, dict) else 0
+        players.sort(key=safe_money, reverse=True)
         return jsonify(players)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-@app.route('/api/game_players/exclude', methods=['POST'])
+@app_flask.route('/api/game_players/exclude', methods=['POST'])
 def toggle_game_exclusion():
-    pwd = request.headers.get('Authorization')
-    if pwd != os.getenv("DASHBOARD_PASSWORD"):
-        return jsonify({"error": "Unauthorized"}), 401
-        
+    if not supabase_game:
+        return jsonify({"error": "Supabase JEU non configuré"}), 503
     data = request.json
     username = data.get('username')
     new_state = data.get('is_excluded')
-    
     try:
         supabase_game.table('players').update({'is_excluded': new_state}).eq('username', username).execute()
         return jsonify({"success": True})

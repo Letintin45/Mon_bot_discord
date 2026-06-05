@@ -54,14 +54,6 @@ function showPage(pageId, elem = null) {
         });
     }
     localStorage.setItem('activeTab', pageId);
-
-    // Chargement des données à la demande selon la page
-    if (!currentGuild) return;
-    if (pageId === 'invites')       { loadInvites(); loadJoinedMembers(); }
-    if (pageId === 'reactionroles') { loadReactionRoles(); }
-    if (pageId === 'warns')         { loadWarns(); }
-    if (pageId === 'economy')       { loadEconomy(); }
-    if (pageId === 'members')       { loadMembersList(); }
 }
 // --------------------------------------------------------
 
@@ -663,65 +655,71 @@ async function loadGamePlayers() {
     const tbody = document.getElementById('gamePlayersListBody');
     if (!tbody) return;
     
-    tbody.innerHTML = '<tr><td colspan="4" style="text-align: center;">Chargement...</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;padding:15px;">Chargement...</td></tr>';
 
     try {
-        // On remplace API_URL par ton lien direct
-        const res = await fetch(`https://admin-tycoon-bot.onrender.com/api/game_players`, {
-            headers: { 'Authorization': password } // "password" est la variable de ton dashboard
-        });
+        const res = await fetch(`${API}/game_players`);
 
-        if (!res.ok) throw new Error("Erreur API");
+        if (!res.ok) {
+            const err = await res.json().catch(() => ({}));
+            throw new Error(err.error || `Erreur ${res.status}`);
+        }
         const players = await res.json();
+
+        if (!players.length) {
+            tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;padding:15px;color:#888;">Aucun joueur trouvé.</td></tr>';
+            return;
+        }
 
         tbody.innerHTML = '';
         players.forEach(player => {
             const isExcluded = player.is_excluded === true;
-            const money = player.game_state?.money || 0;
-            
-            const badge = isExcluded ? '<span style="color:red; font-weight:bold;">🔴 Exclu</span>' : '<span style="color:green;">🟢 Visible</span>';
-            const btnColor = isExcluded ? '#2ecc71' : '#e74c3c';
+            // game_state peut être un objet ou une string JSON
+            let state = player.game_state || {};
+            if (typeof state === 'string') { try { state = JSON.parse(state); } catch { state = {}; } }
+            const money = (state.money || 0).toLocaleString('fr-FR');
+            const level = state.level || 1;
+
+            const badge = isExcluded
+                ? '<span class="badge badge-red">🔴 Exclu</span>'
+                : '<span class="badge badge-green">🟢 Visible</span>';
+            const btnClass = isExcluded ? 'btn-success' : 'btn-danger';
             const btnText = isExcluded ? 'Réintégrer' : 'Exclure';
 
             tbody.innerHTML += `
-                <tr style="border-bottom: 1px solid #333;">
-                    <td style="padding: 10px;">${player.username}</td>
-                    <td style="padding: 10px;">${money} €</td>
-                    <td style="padding: 10px;">${badge}</td>
-                    <td style="padding: 10px;">
-                        <button onclick="toggleGameExclusion('${player.username}', ${isExcluded})" style="background:${btnColor}; color:white; border:none; padding:5px 10px; cursor:pointer; border-radius:3px;">
+                <tr style="border-bottom:1px solid #333;">
+                    <td style="padding:10px;font-weight:bold;color:var(--accent)">${player.username}</td>
+                    <td style="padding:10px;">Niv ${level} — ${money} €</td>
+                    <td style="padding:10px;">${badge}</td>
+                    <td style="padding:10px;">
+                        <button class="btn ${btnClass}" style="padding:5px 10px;font-size:12px"
+                            onclick="toggleGameExclusion('${player.username}', ${isExcluded})">
                             ${btnText}
                         </button>
                     </td>
-                </tr>
-            `;
+                </tr>`;
         });
     } catch (err) {
-        alert("Erreur de connexion au bot Render.");
-        tbody.innerHTML = '';
+        console.error('loadGamePlayers:', err);
+        toast(err.message || 'Erreur de connexion au bot.', 'error');
+        tbody.innerHTML = `<tr><td colspan="4" style="text-align:center;color:#ff4757;padding:15px;">❌ ${err.message}</td></tr>`;
     }
 }
 
 async function toggleGameExclusion(username, currentState) {
     const newState = !currentState;
-    
     if (!confirm(`Voulez-vous ${newState ? 'exclure' : 'réintégrer'} ${username} ?`)) return;
 
     try {
-        const res = await fetch(`https://admin-tycoon-bot.onrender.com/api/game_players/exclude`, {
+        const res = await fetch(`${API}/game_players/exclude`, {
             method: 'POST',
-            headers: { 
-                'Authorization': password,
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ username: username, is_excluded: newState })
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username, is_excluded: newState })
         });
-
-        if (!res.ok) throw new Error("Erreur");
-        
-        alert("Action réussie !"); // On remplace showToast par une alerte classique qui marche toujours
+        if (!res.ok) throw new Error("Erreur API");
+        toast(`Joueur ${newState ? 'exclu' : 'réintégré'} avec succès !`);
         loadGamePlayers();
     } catch (err) {
-        alert("Erreur lors de la modification.");
+        toast('Erreur lors de la modification.', 'error');
     }
 }
