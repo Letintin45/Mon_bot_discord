@@ -223,45 +223,58 @@ async def auto_sync_roles():
 
 async def update_member_level_role(member: discord.Member, user_level: int):
     """
-    Vérifie le niveau du joueur et lui attribue le rôle correspondant,
-    tout en retirant les anciens rôles de niveau inférieurs.
+    Attribue le rôle de niveau correspondant au joueur.
+
+    Règles :
+    - 🖥️ Stagiaire IT     (niv 1)  → JAMAIS retiré (rôle de base permanent)
+    - 📈 Administrateur IT (niv 5)  → retiré si niv >= 10
+    - 🎓 Ingénieur Réseau  (niv 10) → retiré si niv >= 15
+    - 👑 Dieu du Système   (niv 15) → jamais retiré (sommet)
     """
-    # 1. On trouve quel rôle il mérite selon son niveau
+    # ID du 🖥️ Stagiaire IT — protégé, ne sera JAMAIS supprimé automatiquement
+    STAGIAIRE_ID = LEVEL_ROLES.get(1)
+
+    # 1. Trouver le rôle cible (niveau le plus haut débloqué par user_level)
+    target_level = None
     target_role_id = None
-    
-    # On vérifie du plus haut au plus bas (si niv 12, il a le rôle 10)
     for level_req, role_id in sorted(LEVEL_ROLES.items(), reverse=True):
         if user_level >= level_req:
+            target_level = level_req
             target_role_id = role_id
             break
-            
+
     if not target_role_id:
-        return # Le joueur n'a pas un niveau suffisant pour avoir un rôle
+        return  # Niveau insuffisant pour obtenir un rôle
 
     target_role = member.guild.get_role(target_role_id)
     if not target_role:
-        print(f"Erreur: Le rôle avec l'ID {target_role_id} n'existe pas sur le serveur.")
+        print(f"⚠️ Rôle ID {target_role_id} introuvable sur le serveur.")
         return
 
-    # 2. Si le joueur a DÉJÀ le bon rôle, on ne fait rien pour éviter de spammer l'API Discord
+    # 2. Si le joueur a déjà le bon rôle, rien à faire
     if target_role in member.roles:
         return
 
-    # 3. On lui donne le nouveau rôle
+    # 3. Donner le nouveau rôle
     await member.add_roles(target_role)
-    print(f"Promotion ! {member.name} a reçu le rôle {target_role.name}")
-    
-    # 4. (Optionnel mais recommandé) On retire les anciens rôles de niveau
-    # Pour ne pas qu'il soit "Stagiaire" ET "Dieu du Système" en même temps
+    print(f"🎖️ Promotion ! {member.name} → {target_role.name} (niv. {user_level})")
+
+    # 4. Retirer uniquement les rôles de niveau STRICTEMENT INFÉRIEUR au rôle cible
+    #    Le 🖥️ Stagiaire IT (niv 1) est TOUJOURS conservé quoi qu'il arrive
     roles_to_remove = []
-    for level, role_id in LEVEL_ROLES.items():
-        if role_id != target_role_id: # On vérifie tous les rôles SAUF le nouveau
+    for level_req, role_id in LEVEL_ROLES.items():
+        if role_id == target_role_id:
+            continue          # Ne pas retirer le rôle qu'on vient d'attribuer
+        if role_id == STAGIAIRE_ID:
+            continue          # 🖥️ Stagiaire IT → JAMAIS retiré
+        if level_req < target_level:  # Seulement les niveaux inférieurs au cible
             old_role = member.guild.get_role(role_id)
             if old_role and old_role in member.roles:
                 roles_to_remove.append(old_role)
-                
+
     if roles_to_remove:
         await member.remove_roles(*roles_to_remove)
+        print(f"  ↳ Rôles inférieurs retirés : {[r.name for r in roles_to_remove]}")
 
 
 # ── Envoi dans le salon de logs de modération ──
