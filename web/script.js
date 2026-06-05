@@ -54,6 +54,24 @@ function showPage(pageId, elem = null) {
         });
     }
     localStorage.setItem('activeTab', pageId);
+
+    // Rechargement des données selon la page affichée
+    if (!currentGuild) return;
+    if (pageId === 'reactionroles') {
+        // Recharge la config FRAÎCHE depuis le serveur puis affiche les RR
+        loadCurrentConfig().then(() => loadReactionRoles());
+    } else if (pageId === 'invites') {
+        loadInvites();
+        loadJoinedMembers();
+    } else if (pageId === 'warns') {
+        loadWarns();
+    } else if (pageId === 'economy') {
+        loadEconomy();
+    } else if (pageId === 'members') {
+        loadMembersList();
+    } else if (pageId === 'overview') {
+        loadStats();
+    }
 }
 // --------------------------------------------------------
 
@@ -405,16 +423,53 @@ async function removeBannedWord(w) {
 
 // ── REACTION ROLES MULTIPLES ──
 function renderRRPairs() {
-  document.getElementById('rrPairsList').innerHTML = rrPairs.map((p, i) =>
-    `<div style="display:flex;gap:10px;margin-bottom:10px;align-items:center">
-      <input type="text" placeholder="🎮 emoji" value="${p.emoji}" oninput="rrPairs[${i}].emoji=this.value" style="width:100px;flex-shrink:0">
-      <select onchange="rrPairs[${i}].role_id=this.value" style="flex:1">
+  const container = document.getElementById('rrPairsList');
+
+  // Construire le HTML avec data-index pour éviter les conflits de guillemets
+  container.innerHTML = rrPairs.map((p, i) =>
+    `<div style="display:flex;gap:10px;margin-bottom:10px;align-items:center" data-pair="${i}">
+      <input
+        type="text"
+        placeholder="emoji ex: 🎉"
+        value="${p.emoji.replace(/"/g, '&quot;')}"
+        data-index="${i}"
+        data-type="emoji"
+        style="width:120px;flex-shrink:0"
+      >
+      <select data-index="${i}" data-type="role" style="flex:1">
         <option value="">Choisir un rôle</option>
-        ${guildRoles.map(r=>`<option value="${r.id}" ${p.role_id==r.id?'selected':''}>${r.name}</option>`).join('')}
+        ${guildRoles.map(r =>
+          `<option value="${r.id}" ${String(p.role_id) === String(r.id) ? 'selected' : ''}>${r.name}</option>`
+        ).join('')}
       </select>
-      <button class="btn btn-danger" style="padding:6px 10px;font-size:12px" onclick="removeRRPair(${i})">✕</button>
+      <button
+        data-index="${i}"
+        data-type="remove"
+        class="btn btn-danger"
+        style="padding:6px 10px;font-size:12px"
+      >✕</button>
     </div>`
   ).join('');
+
+  // Attacher les événements proprement APRÈS avoir injecté le HTML
+  container.querySelectorAll('input[data-type="emoji"]').forEach(input => {
+    input.addEventListener('input', function() {
+      rrPairs[parseInt(this.dataset.index)].emoji = this.value;
+    });
+  });
+
+  container.querySelectorAll('select[data-type="role"]').forEach(select => {
+    select.addEventListener('change', function() {
+      rrPairs[parseInt(this.dataset.index)].role_id = this.value;
+    });
+  });
+
+  container.querySelectorAll('button[data-type="remove"]').forEach(btn => {
+    btn.addEventListener('click', function() {
+      rrPairs.splice(parseInt(this.dataset.index), 1);
+      renderRRPairs();
+    });
+  });
 }
 function addRRPair() { rrPairs.push({ emoji: '', role_id: '' }); renderRRPairs(); }
 function removeRRPair(i) { rrPairs.splice(i, 1); renderRRPairs(); }
@@ -464,49 +519,109 @@ async function sendPoll() {
 
 // ── DONNEES ──
 async function loadInvites() {
-  const data = await (await fetch(`${API}/invites/${currentGuild}`)).json();
-  const sorted = Object.entries(data).sort((a,b) => (b[1].count||0) - (a[1].count||0)).slice(0,20);
-  document.getElementById('invitesTable').innerHTML = !sorted.length ? `<p>Aucune donnée</p>` : `<table><thead><tr><th>User ID</th><th>Invitations</th></tr></thead><tbody>`+sorted.map(([u,d])=>`<tr><td>${u}</td><td><span class="badge badge-green">${d.count} invites</span></td></tr>`).join('')+`</tbody></table>`;
+  try {
+    const res = await fetch(`${API}/invites/${currentGuild}`);
+    const data = await res.json();
+    const container = document.getElementById('invitesTable');
+
+    // Cas debug : la table Supabase invites n'existe pas encore
+    if (data.__debug__) {
+      container.innerHTML = `<div style="color:var(--text-muted);padding:20px;text-align:center;">
+        <div style="font-size:28px;margin-bottom:10px">📨</div>
+        <p style="margin-bottom:8px">Aucune invitation enregistrée pour le moment.</p>
+        <p style="font-size:12px;color:var(--text-dim)">Les données apparaîtront ici dès qu'un membre rejoindra via une invitation trackée.</p>
+        <p style="font-size:11px;color:#ff6b6b;margin-top:8px">⚠️ Si le problème persiste, vérifie que la table <code>invites</code> existe dans ton Supabase bot (colonnes : <code>guild_id</code>, <code>data</code>).</p>
+      </div>`;
+      return;
+    }
+
+    // Filtrer les entrées avec count > 0
+    const sorted = Object.entries(data)
+      .filter(([, d]) => (d.count || 0) > 0)
+      .sort((a, b) => (b[1].count || 0) - (a[1].count || 0))
+      .slice(0, 20);
+
+    if (!sorted.length) {
+      container.innerHTML = `<div style="color:var(--text-muted);padding:20px;text-align:center;">
+        <div style="font-size:28px;margin-bottom:10px">📨</div>
+        <p>Aucune invitation valide enregistrée pour ce serveur.</p>
+        <p style="font-size:12px;margin-top:8px">Les données apparaissent dès qu'un membre rejoint via une invitation trackée.</p>
+      </div>`;
+      return;
+    }
+
+    container.innerHTML = `<table style="width:100%">
+      <thead><tr><th>User ID</th><th>Invitations vérifiées</th></tr></thead>
+      <tbody>
+        ${sorted.map(([u, d], i) => {
+          const medals = ['🥇','🥈','🥉'];
+          const medal = medals[i] || `${i+1}.`;
+          return `<tr>
+            <td><code style="font-size:12px">${u}</code></td>
+            <td>${medal} <span class="badge badge-green">${d.count} invite${d.count > 1 ? 's' : ''}</span></td>
+          </tr>`;
+        }).join('')}
+      </tbody>
+    </table>`;
+  } catch(e) {
+    document.getElementById('invitesTable').innerHTML = `<p style="color:var(--red)">❌ Erreur de chargement : ${e.message}</p>`;
+    console.error('loadInvites:', e);
+  }
 }
 
 async function loadJoinedMembers() {
+    const tbody = document.getElementById('joinedMembersBody');
+    if (!tbody) return;
+
     try {
         const response = await fetch(`${API}/joined_members/${currentGuild}`);
-        const data = await response.json(); 
-        
-        const tbody = document.getElementById('joinedMembersBody');
-        if (!tbody) return;
-        tbody.innerHTML = ''; 
+        const data = await response.json();
 
-        // S'il n'y a pas de données
-        if (Object.keys(data).length === 0) {
-            tbody.innerHTML = '<tr><td colspan="3" style="text-align:center;">Aucun membre n\'a rejoint via invitation depuis l\'activation du log.</td></tr>';
+        tbody.innerHTML = '';
+
+        if (!data || Object.keys(data).length === 0) {
+            tbody.innerHTML = '<tr><td colspan="3" style="text-align:center;color:var(--text-muted);padding:16px">Aucun membre n\'a encore rejoint via invitation trackée.</td></tr>';
             return;
         }
 
-        for (const [memberId, info] of Object.entries(data)) {
+        // Trier : les plus récents en premier (join_time décroissant)
+        const entries = Object.entries(data).sort((a, b) => {
+            const tA = typeof a[1] === 'object' ? (a[1].join_time || 0) : 0;
+            const tB = typeof b[1] === 'object' ? (b[1].join_time || 0) : 0;
+            return tB - tA;
+        });
+
+        for (const [memberId, info] of entries) {
             const row = document.createElement('tr');
-            
-            // On s'assure de bien extraire l'info, même si c'est un ancien format
+
             let inviterId = 'Aucun';
             let isValid = true;
+            let joinDate = '';
 
             if (typeof info === 'object') {
                 inviterId = info.inviter_id || 'Aucun';
-                isValid = info.is_valid !== false; // Si non défini, on considère True par défaut
+                isValid = info.is_valid !== false;
+                if (info.join_time) {
+                    joinDate = new Date(info.join_time * 1000).toLocaleDateString('fr-FR');
+                }
             } else if (typeof info === 'string') {
                 inviterId = info;
             }
-            
+
+            const validBadge = isValid
+                ? '<span class="badge badge-green">✅ Valide</span>'
+                : '<span class="badge badge-red">⚠️ Faux compte</span>';
+
             row.innerHTML = `
-                <td>${memberId}</td>
-                <td>${inviterId}</td>
-                <td>${isValid ? '✅ Oui' : '⚠️ Faux compte'}</td>
+                <td><code style="font-size:11px">${memberId}</code></td>
+                <td><code style="font-size:11px">${inviterId}</code>${joinDate ? `<br><small style="color:var(--text-muted)">${joinDate}</small>` : ''}</td>
+                <td>${validBadge}</td>
             `;
             tbody.appendChild(row);
         }
-    } catch(e) { 
-        console.error("Erreur chargement membres:", e); 
+    } catch(e) {
+        tbody.innerHTML = `<tr><td colspan="3" style="text-align:center;color:var(--red);padding:16px">❌ Erreur de chargement</td></tr>`;
+        console.error('loadJoinedMembers:', e);
     }
 }
 

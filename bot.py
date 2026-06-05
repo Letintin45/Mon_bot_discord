@@ -2199,7 +2199,22 @@ def pop_warn(guild_id, user_id):
 def get_levels(guild_id): return jsonify(lvl().get(guild_id, {}))
 
 @app_flask.route('/api/invites/<guild_id>')
-def get_invites_api(guild_id): return jsonify(inv().get(guild_id, {}))
+def get_invites_api(guild_id):
+    """
+    Retourne les invitations stockées dans Supabase (comptes anti-leave/anti-alt).
+    Ajoute aussi un debug pour savoir si la table existe bien.
+    """
+    stored = inv().get(guild_id, {})
+
+    # Si vide, on essaie de construire depuis le snapshot Discord live en mémoire
+    if not stored:
+        guild = bot.get_guild(int(guild_id)) if guild_id.isdigit() else None
+        if guild:
+            # Le snapshot mémoire du bot = {code: uses} — pas de user_id ici
+            # On retourne un objet vide avec un flag pour informer le dashboard
+            return jsonify({'__debug__': 'Aucune invitation trackée dans Supabase. La table invites doit être créée ou un membre doit rejoindre via invitation.'})
+    
+    return jsonify(stored)
 
 @app_flask.route('/api/send_message', methods=['POST'])
 def send_message_api():
