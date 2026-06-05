@@ -4,6 +4,8 @@ from discord import app_commands
 import os, json, asyncio, random, re, threading
 from datetime import timedelta, datetime, timezone
 from dotenv import load_dotenv
+from flask import Flask, jsonify, request
+import threading
 
 # --- CONFIGURATION DES RÔLES STAFF ---
 ALLOWED_ROLE_IDS = {
@@ -2345,6 +2347,58 @@ def api_admin_action():
             swrn(w)
             
     return jsonify({'success': True})
+
+
+# ==========================================
+# ROUTES POUR LE DASHBOARD (LEADERBOARD JEU)
+# ==========================================
+
+@app.route('/api/game_players', methods=['GET'])
+def get_game_players():
+    pwd = request.headers.get('Authorization')
+    if pwd != DASHBOARD_PASSWORD:
+        return jsonify({"error": "Unauthorized"}), 401
+        
+    if not supabase_game:
+        return jsonify({"error": "Database jeu non configurée"}), 500
+
+    try:
+        # On lit la base de données du jeu via supabase_game (qui est bien défini en haut de ton fichier)
+        res = supabase_game.table('players').select('username, game_state, is_excluded').execute()
+        players = res.data
+        
+        # On trie du plus riche au plus pauvre
+        players.sort(key=lambda x: x.get('game_state', {}).get('money', 0), reverse=True)
+        return jsonify(players)
+    except Exception as e:
+        print(f"Erreur API /game_players: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/game_players/exclude', methods=['POST'])
+def toggle_game_exclusion():
+    pwd = request.headers.get('Authorization')
+    if pwd != DASHBOARD_PASSWORD:
+        return jsonify({"error": "Unauthorized"}), 401
+        
+    if not supabase_game:
+        return jsonify({"error": "Database jeu non configurée"}), 500
+        
+    data = request.json
+    username = data.get('username')
+    new_state = data.get('is_excluded')
+    
+    if not username:
+        return jsonify({"error": "Username manquant"}), 400
+        
+    try:
+        # On met à jour l'exclusion dans la base de données du jeu
+        supabase_game.table('players').update({'is_excluded': new_state}).eq('username', username).execute()
+        return jsonify({"success": True})
+    except Exception as e:
+        print(f"Erreur API /game_players/exclude: {e}")
+        return jsonify({"error": str(e)}), 500
+
+# Laisse ton ancienne fonction def run_flask() juste en dessous !
 
 
 # /!\ TRÈS IMPORTANT : Le host est 0.0.0.0 pour l'hébergement web /!\

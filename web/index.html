@@ -358,6 +358,31 @@
     <div class="content"><div class="card"><div id="ecoTable">Chargement...</div></div></div>
   </div>
 
+<div class="card" style="margin-top: 30px;">
+        <div class="card-title"><i class="fas fa-trophy"></i> Gestion du Leaderboard (Jeu)</div>
+        <p style="color: var(--text-muted); margin-bottom: 15px;">Liste de tous les comptes créés sur le jeu. Permet de cacher votre compte de test du classement Top 50.</p>
+        
+        <button class="btn btn-primary" onclick="loadGamePlayers()" style="margin-bottom: 15px; width: auto;">
+          <i class="fas fa-sync"></i> Actualiser la liste
+        </button>
+
+        <div class="table-responsive">
+          <table class="table">
+            <thead>
+              <tr>
+                <th>Pseudo</th>
+                <th>Niveau & Argent</th>
+                <th>Statut</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody id="gamePlayersListBody">
+              <tr><td colspan="4" style="text-align: center; color: var(--text-muted);">Cliquez sur Actualiser la liste...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
 <!-- PAGE GESTIONNAIRE DE MEMBRES -->
   <div id="page-members" class="page">
     <div class="header">
@@ -400,6 +425,33 @@
           </div>
           <button class="btn btn-primary" onclick="adminAction('clear_warns')" style="width: 100%; margin-top: 15px;">🗑️ Purger tous les avertissements</button>
         </div>
+      </div>
+    </div>
+    <!-- 🟢 NOUVEAU : GESTION DU LEADERBOARD DU JEU -->
+    <div class="content" style="margin-top: 30px;">
+      <div class="card">
+          <div class="card-title"><span>🏆</span> Gestion du Leaderboard (Jeu)</div>
+          <p style="color: var(--text-muted); margin-bottom: 15px;">Liste des joueurs du jeu (via Supabase). Permet de cacher votre compte de test du classement.</p>
+          
+          <button class="btn btn-primary" onclick="loadGamePlayers()" style="margin-bottom: 15px; background-color: #00e5ff; color: black; font-weight: bold;">
+              🔄 Actualiser la liste des joueurs
+          </button>
+
+          <div style="overflow-x: auto;">
+              <table style="width: 100%; text-align: left; border-collapse: collapse;">
+                  <thead>
+                      <tr style="border-bottom: 2px solid #333;">
+                          <th style="padding: 10px;">Pseudo</th>
+                          <th style="padding: 10px;">Niveau & Argent</th>
+                          <th style="padding: 10px;">Statut</th>
+                          <th style="padding: 10px;">Action</th>
+                      </tr>
+                  </thead>
+                  <tbody id="gamePlayersListBody">
+                      <tr><td colspan="4" style="text-align: center; padding: 15px; color: #666;">Cliquez sur Actualiser la liste...</td></tr>
+                  </tbody>
+              </table>
+          </div>
       </div>
     </div>
   </div>
