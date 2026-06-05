@@ -208,8 +208,23 @@
         <div class="card-title"><span>🔇</span> Exclusion des salons (Niveaux)</div>
         <div class="form-group">
             <label>Salons ignorés par le système d'XP</label>
-            <select id="excludedLevelChannels" multiple style="height:120px; width:100%;"></select>
-            <div class="hint">Maintenez <b>Ctrl</b> pour en sélectionner plusieurs.</div>
+            <div style="position:relative">
+                <div id="excludedDropdownBtn" onclick="toggleExcludedDropdown()"
+                    style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:10px 14px;cursor:pointer;display:flex;align-items:center;justify-content:space-between;user-select:none">
+                    <span id="excludedDropdownLabel" style="color:var(--text-muted);font-size:13px">Aucun salon exclu</span>
+                    <span style="font-size:10px;color:var(--text-muted)">▼</span>
+                </div>
+                <div id="excludedDropdownMenu"
+                    style="display:none;position:absolute;top:calc(100% + 4px);left:0;right:0;z-index:200;background:var(--surface2);border:1px solid var(--border);border-radius:8px;max-height:220px;overflow-y:auto;box-shadow:0 8px 24px rgba(0,0,0,0.4)">
+                    <div style="padding:8px 12px;border-bottom:1px solid var(--border);display:flex;gap:8px">
+                        <input type="text" id="excludedSearch" placeholder="🔍 Rechercher..." oninput="filterExcludedDropdown()"
+                            style="flex:1;background:var(--surface3);border:1px solid var(--border);color:var(--text);padding:6px 10px;border-radius:6px;font-size:12px;outline:none">
+                        <button onclick="clearAllExcluded()" class="btn btn-danger" style="padding:4px 10px;font-size:11px">✕ Tout décocher</button>
+                    </div>
+                    <div id="excludedCheckboxList" style="padding:4px 0"></div>
+                </div>
+            </div>
+            <div class="hint" style="margin-top:6px">Les membres n'y gagnent pas d'XP. Clique sur le menu pour cocher les salons.</div>
         </div>
         <button class="btn btn-primary" onclick="saveExcludedChannels()">💾 Sauvegarder exclusions</button>
       </div>

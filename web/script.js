@@ -177,18 +177,9 @@ async function populateSelects() {
 
     document.getElementById('autoRole').innerHTML = rOpt('auto_role');
     document.getElementById('levelRole').innerHTML = rOpt('');
-    // Injecte dans TOUS les menus
-    document.getElementById('ch_welcome').innerHTML = chOpt('welcome_channel');
-    document.getElementById('ch_leave').innerHTML = chOpt('leave_channel');
-    document.getElementById('ch_suggestions').innerHTML = chOpt('suggestion_channel');
 
-    // 🟢 On convertit tout en String pour que le menu puisse comparer proprement
-    const exSelect = document.getElementById('excludedLevelChannels');
-    const excluded = (currentConfig.excluded_level_channels || []).map(String); 
-
-    exSelect.innerHTML = guildChannels.map(c => 
-        `<option value="${c.id}" ${excluded.includes(String(c.id)) ? 'selected' : ''}>#${c.name}</option>`
-    ).join('');
+    // Remplir le dropdown checkboxes d'exclusion XP
+    renderExcludedDropdown(guildChannels, (currentConfig.excluded_level_channels || []).map(String));
 
     renderLevelRoles();
   } catch(e) {}
@@ -246,12 +237,9 @@ async function loadCurrentConfig() {
 
 
 async function saveExcludedChannels() {
-    const select = document.getElementById('excludedLevelChannels');
-    // On récupère tous les IDs sélectionnés sous forme de tableau de nombres
-    const selected = Array.from(select.selectedOptions).map(option => parseInt(option.value));
-    
-    await saveConfig({ excluded_level_channels: selected });
-    toast('Exclusions mises à jour !');
+    await saveConfig({ excluded_level_channels: excludedChannelIds });
+    updateExcludedDropdownLabel(excludedChannelIds);
+    toast('Exclusions sauvegardées !');
 }
 
 async function createDiscordItem(type) {
@@ -369,14 +357,7 @@ async function addDefaultWords() {
     toast('Liste par défaut ajoutée !');
 }
 
-async function saveExcludedChannels() {
-    const select = document.getElementById('excludedLevelChannels');
-    // 🟢 Plus de parseInt ici non plus !
-    const selected = Array.from(select.selectedOptions).map(option => option.value);
-    
-    await saveConfig({ excluded_level_channels: selected });
-    toast('Exclusions sauvegardées !');
-}
+// (doublon supprimé — saveExcludedChannels est définie plus haut)
 
 async function saveAutoRole() {
   const val = document.getElementById('autoRole').value;
@@ -778,6 +759,81 @@ async function adminAction(action) {
 
 
 
+// ── DROPDOWN CHECKBOXES — EXCLUSION SALONS XP ──
+// Variable centrale : source de vérité pour les exclusions
+let excludedChannelIds = [];
+
+function renderExcludedDropdown(channels, excludedIds) {
+    excludedChannelIds = excludedIds.map(String); // sync avec la variable centrale
+    const list = document.getElementById('excludedCheckboxList');
+    if (!list) return;
+    list.innerHTML = channels.map(c => {
+        const isChecked = excludedChannelIds.includes(String(c.id));
+        return `<label style="display:flex;align-items:center;gap:10px;padding:8px 14px;cursor:pointer;transition:background 0.1s"
+                    onmouseover="this.style.background='var(--surface3)'"
+                    onmouseout="this.style.background='transparent'">
+            <input type="checkbox" value="${c.id}" ${isChecked ? 'checked' : ''}
+                onchange="onExcludedChange(this)"
+                style="width:15px;height:15px;accent-color:var(--accent);cursor:pointer;flex-shrink:0">
+            <span style="font-size:13px">#${c.name}</span>
+        </label>`;
+    }).join('');
+    updateExcludedDropdownLabel(excludedChannelIds);
+}
+
+function filterExcludedDropdown() {
+    const q = document.getElementById('excludedSearch').value.toLowerCase();
+    document.querySelectorAll('#excludedCheckboxList label').forEach(label => {
+        const name = label.querySelector('span').textContent.toLowerCase();
+        label.style.display = name.includes(q) ? 'flex' : 'none';
+    });
+}
+
+function toggleExcludedDropdown() {
+    const menu = document.getElementById('excludedDropdownMenu');
+    const isOpen = menu.style.display !== 'none';
+    menu.style.display = isOpen ? 'none' : 'block';
+    if (!isOpen) document.getElementById('excludedSearch').focus();
+}
+
+function updateExcludedDropdownLabel(excludedIds) {
+    const btn = document.getElementById('excludedDropdownLabel');
+    if (!btn) return;
+    const count = Array.isArray(excludedIds)
+        ? excludedIds.length
+        : document.querySelectorAll('#excludedCheckboxList input:checked').length;
+    btn.textContent = count === 0
+        ? 'Aucun salon exclu'
+        : `${count} salon${count > 1 ? 's' : ''} exclu${count > 1 ? 's' : ''}`;
+    btn.style.color = count > 0 ? 'var(--text)' : 'var(--text-muted)';
+}
+
+function onExcludedChange(cb) {
+    if (!cb) return;
+    const id = String(cb.value);
+    if (cb.checked) {
+        if (!excludedChannelIds.includes(id)) excludedChannelIds.push(id);
+    } else {
+        excludedChannelIds = excludedChannelIds.filter(x => x !== id);
+    }
+    updateExcludedDropdownLabel(excludedChannelIds);
+}
+
+function clearAllExcluded() {
+    excludedChannelIds = [];
+    document.querySelectorAll('#excludedCheckboxList input[type="checkbox"]').forEach(cb => cb.checked = false);
+    updateExcludedDropdownLabel([]);
+}
+
+// Fermer le dropdown si on clique ailleurs
+document.addEventListener('click', function(e) {
+    const btn = document.getElementById('excludedDropdownBtn');
+    const menu = document.getElementById('excludedDropdownMenu');
+    if (menu && btn && !btn.contains(e.target) && !menu.contains(e.target)) {
+        menu.style.display = 'none';
+    }
+});
+
 document.addEventListener('DOMContentLoaded', async () => {
   ['welcomeTitle', 'welcomeMessage', 'welcomeColor', 'welcomeShowInviter'].forEach(id => { document.getElementById(id)?.addEventListener('input', updatePreview); });
   rrPairs = []; renderRRPairs();
@@ -785,7 +841,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Vérifie si un token Discord est présent
   if (localStorage.getItem('discord_token')) {
       const res = await fetch(`${API}/login`, {method: 'POST'});
-      if (res.ok) {
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.success) {
           document.getElementById('loginOverlay').style.display = 'none';
           init();
       } else {
