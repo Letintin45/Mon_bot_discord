@@ -151,6 +151,10 @@ async function populateSelects() {
 
     document.getElementById('autoRole').innerHTML = rOpt('auto_role');
     document.getElementById('levelRole').innerHTML = rOpt('');
+    // Injecte dans TOUS les menus
+    document.getElementById('ch_welcome').innerHTML = chOpt('welcome_channel');
+    document.getElementById('ch_leave').innerHTML = chOpt('leave_channel');
+    document.getElementById('ch_suggestions').innerHTML = chOpt('suggestion_channel');
 
     // 🟢 On convertit tout en String pour que le menu puisse comparer proprement
     const exSelect = document.getElementById('excludedLevelChannels');
@@ -622,15 +626,95 @@ async function adminAction(action) {
 }
 
 // ==========================================
-// GESTION DU CLASSEMENT JEU (VIA BOT API)
+// GESTION DU LEADERBOARD DU JEU (VIA BOT API)
 // ==========================================
+
+async function loadGamePlayers() {
+    const tbody = document.getElementById('gamePlayersListBody');
+    tbody.innerHTML = '<tr><td colspan="4" style="text-align: center;">Chargement en cours...</td></tr>';
+
+    try {
+        // 🟢 Sécurisé : On appelle l'API de TON bot avec le mot de passe Dashboard !
+        const res = await fetch(`${API_URL}/api/game_players`, {
+            headers: { 'Authorization': password }
+        });
+
+        if (!res.ok) throw new Error("Erreur de l'API Bot");
+        const players = await res.json();
+
+        tbody.innerHTML = '';
+        
+        players.forEach(player => {
+            const isExcluded = player.is_excluded === true;
+            const money = player.game_state?.money || 0;
+            const level = player.game_state?.level || 1;
+
+            const statusBadge = isExcluded 
+                ? '<span class="badge" style="background: #ff4757; color: white;">🔴 Exclu</span>' 
+                : '<span class="badge" style="background: #2ecc71; color: white;">🟢 Visible</span>';
+
+            const btnClass = isExcluded ? 'btn-success' : 'btn-danger';
+            const btnText = isExcluded ? 'Réintégrer au Top' : 'Exclure du Top';
+            const icon = isExcluded ? 'fa-check' : 'fa-ban';
+
+            tbody.innerHTML += `
+                <tr>
+                    <td style="font-weight: bold; color: var(--accent);">${player.username}</td>
+                    <td>Niv ${level} <span style="color: #ffd700;">(${money.toLocaleString('fr-FR')} €)</span></td>
+                    <td>${statusBadge}</td>
+                    <td>
+                        <button class="btn ${btnClass}" onclick="toggleGameExclusion('${player.username}', ${isExcluded})" style="padding: 5px 10px; font-size: 12px; width: auto;">
+                            <i class="fas ${icon}"></i> ${btnText}
+                        </button>
+                    </td>
+                </tr>
+            `;
+        });
+    } catch (err) {
+        console.error(err);
+        showToast("Erreur lors du chargement des joueurs du jeu.", "error");
+        tbody.innerHTML = '<tr><td colspan="4" style="text-align: center; color: #ff4757;">Erreur de chargement.</td></tr>';
+    }
+}
+
+async function toggleGameExclusion(username, currentState) {
+    const newState = !currentState;
+    const actionMsg = newState ? "exclure" : "réintégrer";
+
+    if (!confirm(`Voulez-vous vraiment ${actionMsg} le joueur "${username}" du classement public ?`)) return;
+
+    try {
+        // 🟢 Sécurisé : La requête est envoyée au bot, jamais directement à Supabase !
+        const res = await fetch(`${API_URL}/api/game_players/exclude`, {
+            method: 'POST',
+            headers: { 
+                'Authorization': password,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ username: username, is_excluded: newState })
+        });
+
+        if (!res.ok) throw new Error("Erreur de l'API Bot");
+
+        showToast(`Joueur ${newState ? 'exclu' : 'réintégré'} avec succès !`, "success");
+        loadGamePlayers(); // On recharge le tableau immédiatement
+
+    } catch (err) {
+        console.error(err);
+        showToast("Erreur lors de la modification du joueur.", "error");
+    }
+}
+
+
+document.addEventListener('DOMContentLoaded', async () => {
   ['welcomeTitle', 'welcomeMessage', 'welcomeColor', 'welcomeShowInviter'].forEach(id => { document.getElementById(id)?.addEventListener('input', updatePreview); });
   rrPairs = []; renderRRPairs();
   
   // Vérifie si un token Discord est présent
   if (localStorage.getItem('discord_token')) {
       const res = await fetch(`${API}/login`, {method: 'POST'});
-      if (res.ok) {
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.success) {
           document.getElementById('loginOverlay').style.display = 'none';
           init();
       } else {
@@ -640,6 +724,7 @@ async function adminAction(action) {
   } else {
       document.getElementById('loginOverlay').style.display = 'flex';
   }
+});
 
 
 // ==========================================
@@ -653,54 +738,62 @@ async function loadGamePlayers() {
     tbody.innerHTML = '<tr><td colspan="4" style="text-align: center;">Chargement...</td></tr>';
 
     try {
-        const res = await fetch(`${API}/game_players`);
+        // On remplace API_URL par ton lien direct
+        const res = await fetch(`https://admin-tycoon-bot.onrender.com/api/game_players`, {
+            headers: { 'Authorization': password } // "password" est la variable de ton dashboard
+        });
+
         if (!res.ok) throw new Error("Erreur API");
         const players = await res.json();
 
         tbody.innerHTML = '';
         players.forEach(player => {
             const isExcluded = player.is_excluded === true;
-            const state = typeof player.game_state === 'string' ? JSON.parse(player.game_state) : (player.game_state || {});
-            const money = state.money || 0;
-            const level = state.level || 1;
+            const money = player.game_state?.money || 0;
             
-            const badge = isExcluded 
-                ? '<span class="badge badge-red">🔴 Exclu</span>' 
-                : '<span class="badge badge-green">🟢 Visible</span>';
-            const btnClass = isExcluded ? 'btn-success' : 'btn-danger';
+            const badge = isExcluded ? '<span style="color:red; font-weight:bold;">🔴 Exclu</span>' : '<span style="color:green;">🟢 Visible</span>';
+            const btnColor = isExcluded ? '#2ecc71' : '#e74c3c';
             const btnText = isExcluded ? 'Réintégrer' : 'Exclure';
 
             tbody.innerHTML += `
                 <tr style="border-bottom: 1px solid #333;">
-                    <td style="padding: 10px; font-weight:bold; color:var(--accent)">${player.username}</td>
-                    <td style="padding: 10px;">Niv ${level} — ${money.toLocaleString('fr-FR')} €</td>
+                    <td style="padding: 10px;">${player.username}</td>
+                    <td style="padding: 10px;">${money} €</td>
                     <td style="padding: 10px;">${badge}</td>
                     <td style="padding: 10px;">
-                        <button class="btn ${btnClass}" style="padding:5px 10px;font-size:12px" onclick="toggleGameExclusion('${player.username}', ${isExcluded})">${btnText}</button>
+                        <button onclick="toggleGameExclusion('${player.username}', ${isExcluded})" style="background:${btnColor}; color:white; border:none; padding:5px 10px; cursor:pointer; border-radius:3px;">
+                            ${btnText}
+                        </button>
                     </td>
                 </tr>
             `;
         });
     } catch (err) {
-        toast("Erreur de connexion au bot.", "error");
-        tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:#ff4757">Erreur de chargement.</td></tr>';
+        alert("Erreur de connexion au bot Render.");
+        tbody.innerHTML = '';
     }
 }
 
 async function toggleGameExclusion(username, currentState) {
     const newState = !currentState;
+    
     if (!confirm(`Voulez-vous ${newState ? 'exclure' : 'réintégrer'} ${username} ?`)) return;
 
     try {
-        const res = await fetch(`${API}/game_players/exclude`, {
+        const res = await fetch(`https://admin-tycoon-bot.onrender.com/api/game_players/exclude`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ username, is_excluded: newState })
+            headers: { 
+                'Authorization': password,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ username: username, is_excluded: newState })
         });
+
         if (!res.ok) throw new Error("Erreur");
-        toast(`Joueur ${newState ? 'exclu' : 'réintégré'} avec succès !`);
+        
+        alert("Action réussie !"); // On remplace showToast par une alerte classique qui marche toujours
         loadGamePlayers();
     } catch (err) {
-        toast("Erreur lors de la modification.", "error");
+        alert("Erreur lors de la modification.");
     }
 }

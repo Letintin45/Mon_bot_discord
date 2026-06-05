@@ -1,11 +1,11 @@
 import discord
 from discord.ext import commands, tasks
 from discord import app_commands
-import os, json, asyncio, random, re, threading, urllib.request
+import os, json, asyncio, random, re, threading
 from datetime import timedelta, datetime, timezone
 from dotenv import load_dotenv
 from flask import Flask, jsonify, request
-from flask_cors import CORS
+import threading
 
 # --- CONFIGURATION DES RÔLES STAFF ---
 ALLOWED_ROLE_IDS = {
@@ -1953,6 +1953,10 @@ async def aide_cmd(interaction: discord.Interaction, categorie: app_commands.Cho
 # ============================================================
 # 13. DASHBOARD API FLASK (Tourne en arrière-plan) - SÉCURISÉE 🔒
 # ============================================================
+from flask import Flask, request, jsonify
+from flask_cors import CORS
+import urllib.request
+import json
 
 app_flask = Flask(__name__)
 
@@ -1968,11 +1972,10 @@ auth_cache = {}
 
 @app_flask.before_request
 def require_auth():
-    # 🟢 On retourne "None" au lieu de 204 pour laisser Flask-CORS faire son travail
     if request.method == 'OPTIONS':
-        return 
+        return jsonify({}), 200
         
-    if request.path in ('/ping', '/api/debug'):
+    if request.path in ('/ping', '/api/debug', '/api/login'):
         return
 
     auth_header = request.headers.get('Authorization', '')
@@ -2017,10 +2020,27 @@ def api_debug():
     
 @app_flask.route('/api/login', methods=['POST'])
 def api_login():
-    # Plus de vérification manuelle OPTIONS ici, Flask-CORS gère tout !
     token = request.headers.get('Authorization', '').replace('Bearer ', '').strip()
-    user_id = auth_cache.get(token)
-    return jsonify({'success': True, 'user_id': user_id})
+    
+    if not token:
+        return jsonify({'success': False, 'error': 'Token manquant.'}), 401
+
+    # Si déjà en cache, on renvoie directement
+    if token in auth_cache:
+        return jsonify({'success': True, 'user_id': auth_cache[token]})
+
+    # Sinon on valide auprès de Discord
+    req = urllib.request.Request("https://discord.com/api/users/@me")
+    req.add_header("Authorization", f"Bearer {token}")
+    req.add_header("User-Agent", "AdminTycoonBot (https://letintin45.github.io, 1.0)")
+    try:
+        with urllib.request.urlopen(req) as response:
+            user_data = json.loads(response.read())
+            auth_cache[token] = int(user_data['id'])
+            return jsonify({'success': True, 'user_id': auth_cache[token]})
+    except Exception as e:
+        print(f"❌ Erreur Token Discord (login) : {e}")
+        return jsonify({'success': False, 'error': 'Token invalide.'}), 401
 
 @app_flask.route('/api/test/welcome/<guild_id>', methods=['POST'])
 def api_test_welcome(guild_id):
