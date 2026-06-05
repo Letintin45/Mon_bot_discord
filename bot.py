@@ -219,6 +219,53 @@ async def auto_sync_roles():
                 
     except Exception as e:
         print(f"❌ Erreur lors de la synchronisation automatique: {e}")
+
+
+@tasks.loop(hours=1)
+async def auto_update_leaderboard():
+    if not supabase_game: return
+    try:
+        res = supabase_game.table('players').select('username, game_state, is_excluded').execute()
+        if not res.data: return
+        
+        valid_players = [p for p in res.data if not p.get('is_excluded')]
+        
+        def get_money(p):
+            st = p.get('game_state', {})
+            if isinstance(st, str):
+                try: st = json.loads(st)
+                except: return 0
+            return float(st.get('money', 0)) if isinstance(st, dict) else 0
+            
+        valid_players.sort(key=get_money, reverse=True)
+        top_10 = valid_players[:10]
+        
+        embed = discord.Embed(title="🏆 TOP 10 MONDIAL - Admin Tycoon", color=0xffd700, timestamp=discord.utils.utcnow())
+        embed.description = "Ce classement s'actualise automatiquement toutes les heures."
+        
+        medals = ["🥇","🥈","🥉", "4️⃣","5️⃣","6️⃣","7️⃣","8️⃣","9️⃣","🔟"]
+        for i, p in enumerate(top_10):
+            st = p.get('game_state', {})
+            if isinstance(st, str): st = json.loads(st)
+            lvl = st.get('level', 1) if isinstance(st, dict) else 1
+            money = st.get('money', 0) if isinstance(st, dict) else 0
+            vip = "💎" if isinstance(st, dict) and st.get('is_vip') else ""
+            embed.add_field(name=f"{medals[i]} {p.get('username')} {vip}", value=f"Niv {lvl} | {int(money):,} €", inline=False)
+            
+        c = cfg()
+        for gid_str, data in c.items():
+            ch_id = data.get('live_lb_channel')
+            if ch_id:
+                guild = bot.get_guild(int(gid_str))
+                if guild:
+                    ch = guild.get_channel(ch_id)
+                    if ch:
+                        # Nettoie les anciens classements du bot et envoie le nouveau
+                        await ch.purge(limit=5, check=lambda m: m.author == bot.user)
+                        await ch.send(embed=embed)
+    except Exception as e:
+        print(f"Erreur Auto-Leaderboard: {e}")
+
 # ============================================================
 
 async def update_member_level_role(member: discord.Member, user_level: int):
@@ -523,6 +570,10 @@ async def on_ready():
     if not auto_sync_roles.is_running():
         auto_sync_roles.start()
         print("🔄 Boucle automatique de synchronisation des rôles lancée (15 min).")
+
+    if not auto_update_leaderboard.is_running():
+        auto_update_leaderboard.start()
+        print("🏆 Boucle Auto-Leaderboard lancée (1h).")
 
 @bot.event
 async def on_invite_create(invite): bot.invites_tracker[invite.guild.id] = await build_invite_snapshot(invite.guild)
@@ -1181,6 +1232,50 @@ async def config_suggestions(interaction: discord.Interaction, salon: discord.Te
     scfg(c)
     
     await interaction.response.send_message(f"✅ Salon {salon.mention} configuré !", ephemeral=True)
+
+@bot.tree.command(name="config-leaderboard", description="Salon où le classement du jeu web s'actualisera tout seul.")
+@app_commands.default_permissions(administrator=True)
+async def set_live_lb(interaction: discord.Interaction, salon: discord.TextChannel):
+    c = cfg(); gid = str(interaction.guild.id)
+    if gid not in c: c[gid] = {}
+    c[gid]['live_lb_channel'] = salon.id; scfg(c)
+    await interaction.response.send_message(f"🏆 Classement en direct défini sur {salon.mention}", ephemeral=True)
+
+@bot.tree.command(name="boost-jeu", description="Achète un boost de +20% sur tes revenus du jeu web pendant 1h (Coût: 5000 🪙)")
+async def boost_jeu(interaction: discord.Interaction):
+    await interaction.response.defer(ephemeral=True)
+    # Vérifie si le compte est lié
+    res = supabase_game.table('players').select('username, game_state').eq('discord_id', str(interaction.user.id)).execute()
+    if not res.data:
+        return await interaction.followup.send("❌ Tu dois d'abord lier ton compte sur le jeu web (Bouton 🔗 Rôles Discord).")
+    
+    # Vérifie l'argent Discord
+    gid = str(interaction.guild.id)
+    uid = str(interaction.user.id)
+    e, wallet = get_wallet(gid, uid)
+    if wallet['coins'] < 5000:
+        return await interaction.followup.send("❌ Il te faut 5000 🪙 dans ton portefeuille Discord !")
+        
+    e[gid][uid]['coins'] -= 5000
+    seco(e)
+    
+    # Applique le boost sur le jeu
+    username = res.data[0]['username']
+    state = res.data[0]['game_state']
+    if isinstance(state, str): state = json.loads(state)
+    now = datetime.now(timezone.utc).timestamp()
+    state['discord_boost_until'] = now + 3600
+    
+    # Met à jour la BDD du jeu
+    supabase_game.table('players').update({'game_state': state}).eq('username', username).execute()
+    saves = supabase_game.table('saves').select('id, game_state').eq('username', username).execute()
+    for s in saves.data:
+        s_st = s['game_state']
+        if isinstance(s_st, str): s_st = json.loads(s_st)
+        s_st['discord_boost_until'] = now + 3600
+        supabase_game.table('saves').update({'game_state': s_st}).eq('id', s['id']).execute()
+        
+    await interaction.followup.send("🚀 **Achat réussi !** Tes serveurs génèrent maintenant **+20% de revenus** pendant 1 heure ! Retourne vite sur le jeu !")
 
     
 @bot.tree.command(name="config-levelup", description="Salon des annonces de level up.")
@@ -1897,39 +1992,26 @@ async def eightball(interaction: discord.Interaction, question: str):
     embed.add_field(name="❓", value=question); embed.add_field(name="🔮", value=random.choice(answers))
     await interaction.response.send_message(embed=embed)
 
-@bot.tree.command(name="aide", description="Affiche toutes les commandes du bot.")
+@bot.tree.command(name="aide", description="Affiche les commandes du bot.")
 @app_commands.choices(categorie=[
-    app_commands.Choice(name="Setup", value="⚙️ Setup"),
-    app_commands.Choice(name="Modération", value="🔨 Modération"),
+    app_commands.Choice(name="Setup (Admin)", value="⚙️ Setup"),
+    app_commands.Choice(name="Modération (Staff)", value="🔨 Modération"),
+    app_commands.Choice(name="Outils Admin (Staff)", value="🛠️ Outils Admin"), # 🟢 NOUVELLE CATÉGORIE
     app_commands.Choice(name="Invitations", value="📨 Invitations"),
     app_commands.Choice(name="Économie", value="💰 Économie"),
     app_commands.Choice(name="Niveaux", value="⭐ Niveaux"),
     app_commands.Choice(name="Fun & Jeux", value="🎮 Fun & Jeux"),
     app_commands.Choice(name="Informations", value="ℹ️ Informations"),
-    app_commands.Choice(name="Admin Tycoon (Jeu)", value="🌐 Le Jeu") # 🟢 NOUVEAU
+    app_commands.Choice(name="Admin Tycoon (Jeu)", value="🌐 Le Jeu")
 ])
 async def aide_cmd(interaction: discord.Interaction, categorie: app_commands.Choice[str] = None):
+    # 🟢 VÉRIFICATION : Est-ce que l'utilisateur est un Admin ou un Staff ?
+    is_admin = interaction.user.guild_permissions.administrator or is_staff(interaction.user)
+
+    # 🟢 Commandes PUBIQUES (Visibles par tous les joueurs)
     categories = {
-        "⚙️ Setup": [
-            ("`/config-regles`","Règles"),("`/config-tickets`","Tickets"),
-            ("`/config-bienvenue`","Bienvenue"),("`/config-depart`","Départ"),
-            ("`/config-logs`","Logs global"),("`/config-modlog`","Logs modération"),
-            ("`/config-suggestions`","Suggestions"),("`/config-levelup`","Level-up"),
-            ("`/config-autorole`","Auto-rôle"),("`/config-levelrole`","Rôle niveau"),
-            ("`/config-maxtickets`","Max tickets"),("`/config-antispam`","Anti-spam"),
-            ("`/config-mot-interdit`","Mot interdit"), ("`/config-exclure-salon`", "Exclure XP"),
-            ("`/config-inclure-salon`", "Inclure XP")
-        ],
-        "🔨 Modération": [
-            ("`/ban`","Bannir"),("`/deban`","Débannir"),("`/expulser`","Expulser"),
-            ("`/mute`","Rendre muet"),("`/demute`","Démute"),("`/avertir`","Avertir"),
-            ("`/infractions-retirer`","Unwarn"),("`/infractions-lister`","Voir warns"),
-            ("`/infractions-reinitialiser`","Purger warns"), ("`/purge`","Purger messages"),
-            ("`/slowmode`","Slowmode"),("`/lock`","Lock salon"),("`/unlock`","Unlock salon")
-        ],
         "📨 Invitations": [
-            ("`/invites`","Invitations perso"),("`/topinvites`","Top inviteurs"),
-            ("`/invitations-reinitialiser`","Purger invitations")
+            ("`/invites`","Invitations perso"),("`/topinvites`","Top inviteurs")
         ],
         "💰 Économie": [
             ("`/solde`","Solde"),("`/journalier`","Quotidien"),("`/travail`","Travailler"),
@@ -1938,37 +2020,76 @@ async def aide_cmd(interaction: discord.Interaction, categorie: app_commands.Cho
             ("`/shop`","Voir la boutique"),("`/buy`","Acheter un article")
         ],
         "⭐ Niveaux": [
-            ("`/rank`","Niveau"),("`/leveltop`","Top niveaux"),("`/level-reset`", "Reset niveau")
+            ("`/rank`","Niveau"),("`/leveltop`","Top niveaux")
         ],
         "🎮 Fun & Jeux": [
-            ("`/poll`","Sondage"),("`/giveaway`","Giveaway"), ("`/aide-jeux`", "Guide des jeux"),
-            ("`/pile-face`","Pile/Face"),("`/roll`","Dés"),("`/8ball`","Magique")
+            ("`/aide-jeux`", "Guide des jeux"),("`/pile-face`","Pile/Face"),
+            ("`/roll`","Dés"),("`/8ball`","Magique")
         ],
         "ℹ️ Informations": [
-            ("`/rappel-creer`","Créer rappel"),("`/embed`","Embed personnalisé"),
-            ("`/userinfo`","Infos User"),("`/serverinfo`","Infos Serveur"),
-            ("`/avatar`","Avatar"),("`/ping`","Ping"),("`/note`","Ajouter Note"),
-            ("`/notes`","Mes Notes"),("`/envoyer`","Faire parler le bot")
+            ("`/rappel-creer`","Créer rappel"),("`/userinfo`","Infos User"),
+            ("`/serverinfo`","Infos Serveur"),("`/avatar`","Avatar"),("`/ping`","Ping")
         ],
-        # 👇 🟢 NOUVELLE CATÉGORIE ICI 👇
         "🌐 Le Jeu": [
             ("`/sync`","Réclamer ses rôles (Nécessite de lier son compte en jeu)"),
+            ("`/boost-jeu`","Acheter +20% de revenus sur le jeu (5000 🪙)"),
             ("Lien du jeu", "https://admin-tycoon.onrender.com/")
         ]
     }
-    
+
+    # 🔴 Commandes CACHÉES (Visibles uniquement par le Staff/Admin)
+    admin_categories = {
+        "⚙️ Setup": [
+            ("`/config-regles`","Règles"),("`/config-tickets`","Tickets"),
+            ("`/config-bienvenue`","Bienvenue"),("`/config-depart`","Départ"),
+            ("`/config-logs`","Logs global"),("`/config-modlog`","Logs modération"),
+            ("`/config-suggestions`","Suggestions"),("`/config-levelup`","Level-up"),
+            ("`/config-autorole`","Auto-rôle"),("`/config-levelrole`","Rôle niveau"),
+            ("`/config-maxtickets`","Max tickets"),("`/config-antispam`","Anti-spam"),
+            ("`/config-mot-interdit`","Mot interdit"), ("`/config-exclure-salon`", "Exclure XP"),
+            ("`/config-inclure-salon`", "Inclure XP"), ("`/config-leaderboard`","[NOUVEAU] Auto-actualisation du Top 10")
+        ],
+        "🔨 Modération": [
+            ("`/ban`","Bannir"),("`/deban`","Débannir"),("`/expulser`","Expulser"),
+            ("`/mute`","Rendre muet"),("`/demute`","Démute"),("`/avertir`","Avertir"),
+            ("`/infractions-retirer`","Unwarn"),("`/infractions-lister`","Voir warns"),
+            ("`/infractions-reinitialiser`","Purger warns"), ("`/purge`","Purger messages"),
+            ("`/slowmode`","Slowmode"),("`/lock`","Lock salon"),("`/unlock`","Unlock salon")
+        ],
+        "🛠️ Outils Admin": [
+            ("`/invitations-reinitialiser`","Purger les invitations"),
+            ("`/level-reset`","Réinitialiser le niveau d'un joueur"),
+            ("`/envoyer`","Faire parler le bot"),
+            ("`/embed`","Créer un Embed personnalisé"),
+            ("`/giveaway`","Lancer un Giveaway"),
+            ("`/poll`","Lancer un Sondage officiel"),
+            ("`/note`","Ajouter une note de modération"),
+            ("`/notes`","Voir les notes d'un joueur")
+        ]
+    }
+
+    # Si c'est un staff, on ajoute les catégories secrètes à son menu
+    if is_admin:
+        categories.update(admin_categories)
+
     if categorie:
         cat_name = categorie.value
-        embed = discord.Embed(title=f"❓ {cat_name}", color=0x5865F2)
-        for cmd, desc in categories[cat_name]: 
-            embed.add_field(name=cmd, value=desc, inline=True)
+        # Si un joueur normal essaie de forcer l'affichage d'une catégorie admin
+        if cat_name in admin_categories and not is_admin:
+            return await interaction.response.send_message("❌ Tu n'as pas la permission de voir cette catégorie.", ephemeral=True)
             
-        # Description détaillée si on choisit le jeu
+        embed = discord.Embed(title=f"❓ {cat_name}", color=0x5865F2)
+        
+        # On vérifie que la catégorie existe bien dans ce que l'utilisateur a le droit de voir
+        if cat_name in categories:
+            for cmd, desc in categories[cat_name]: 
+                embed.add_field(name=cmd, value=desc, inline=True)
+            
         if cat_name == "🌐 Le Jeu":
-            embed.description = "**Admin Tycoon** est notre jeu de gestion de serveurs sur navigateur.\nDéveloppe ton Data Center et gagne de l'XP en résolvant des pannes système !\n\nPour obtenir tes rôles Discord en fonction de ton niveau en jeu, va sur le jeu, clique sur **🔗 Rôles Discord**, puis reviens ici et tape `/sync`."
+            embed.description = "**Admin Tycoon** est notre jeu de gestion de serveurs sur navigateur.\n\nPour obtenir tes rôles Discord, va sur le jeu, clique sur **🔗 Rôles Discord**, puis reviens ici et tape `/sync`.\nUtilise l'argent gagné sur Discord avec `/boost-jeu` pour booster tes revenus !"
             
     else:
-        embed = discord.Embed(title="❓ Aide Administrateur", description="Utilisez `/aide [catégorie]` pour les détails.", color=0x5865F2, timestamp=discord.utils.utcnow())
+        embed = discord.Embed(title="❓ Menu d'aide", description="Sélectionne une catégorie avec `/aide [catégorie]`.", color=0x5865F2)
         for cat_name, cmds_list in categories.items():
             embed.add_field(name=cat_name, value=f"`{len(cmds_list)}` commandes", inline=True)
             
@@ -2184,12 +2305,27 @@ def get_stats(guild_id):
     total_coins = sum(v.get('coins',0)+v.get('bank',0) for v in ge.values())
     total_warns = sum(len(v) for v in gw.values())
     top_inv = max(gi.items(), key=lambda x: x[1].get('count',0), default=(None,{'count':0}))
+    
+    total_game_players = 0
+    total_game_money = 0
+    if supabase_game:
+        pres = supabase_game.table('players').select('game_state').execute()
+        if pres.data:
+            total_game_players = len(pres.data)
+            for p in pres.data:
+                st = p.get('game_state', {})
+                if isinstance(st, str): 
+                    try: st = json.loads(st)
+                    except: st = {}
+                total_game_money += float(st.get('money', 0)) if isinstance(st, dict) else 0
+
     open_tickets = 0
     g = bot.get_guild(int(guild_id)) if guild_id.isdigit() else None
     if g: open_tickets = sum(1 for ch in g.text_channels if ch.name.startswith('ticket-'))
     return jsonify({**gs, 'total_coins_circulating': total_coins, 'total_warns': total_warns,
                     'active_members_economy': len(ge), 'active_members_levels': len(l.get(guild_id,{})),
-                    'top_inviter_count': top_inv[1].get('count',0), 'open_tickets': open_tickets})
+                    'top_inviter_count': top_inv[1].get('count',0), 'open_tickets': open_tickets,
+                    'total_game_players': total_game_players, 'total_game_money': total_game_money})
 
 @app_flask.route('/api/guild/<guild_id>/channels')
 def get_channels(guild_id):

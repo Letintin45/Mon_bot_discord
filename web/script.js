@@ -200,6 +200,8 @@ async function loadStats() {
       <div class="stat-card"><span class="stat-icon">⚠️</span><div class="stat-value">${data.total_warns || 0}</div><div class="stat-label">Warns actifs</div></div>
       <div class="stat-card"><span class="stat-icon">👥</span><div class="stat-value">${data.active_members_economy || 0}</div><div class="stat-label">Membres actifs éco</div></div>
       <div class="stat-card"><span class="stat-icon">📨</span><div class="stat-value">${data.top_inviter_count || 0}</div><div class="stat-label">Record invitations</div></div>
+      <div class="stat-card" style="border:1px solid #00e5ff; background: rgba(0,229,255,0.05);"><span class="stat-icon">🎮</span><div class="stat-value">${data.total_game_players || 0}</div><div class="stat-label" style="color:#00e5ff;">Comptes Jeu Créés</div></div>
+      <div class="stat-card" style="border:1px solid #00e5ff; background: rgba(0,229,255,0.05);"><span class="stat-icon">💶</span><div class="stat-value">${Number(data.total_game_money || 0).toLocaleString()} €</div><div class="stat-label" style="color:#00e5ff;">Argent Global (Jeu)</div></div>    
     `;
   } catch(e) {}
 }
