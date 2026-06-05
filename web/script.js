@@ -58,8 +58,16 @@ function showPage(pageId, elem = null) {
     // Rechargement des données selon la page affichée
     if (!currentGuild) return;
     if (pageId === 'reactionroles') {
-        // Recharge la config FRAÎCHE depuis le serveur puis affiche les RR
-        loadCurrentConfig().then(() => loadReactionRoles());
+        // Toujours recharger la config depuis l'API puis afficher
+        fetch(`${API}/config/${currentGuild}`)
+            .then(r => r.json())
+            .then(cfg => {
+                currentConfig = cfg;
+                loadReactionRoles();
+            })
+            .catch(() => {
+                document.getElementById('rrList').innerHTML = '<p style="color:#ff6b6b">❌ Erreur de connexion au bot.</p>';
+            });
     } else if (pageId === 'invites') {
         loadInvites();
         loadJoinedMembers();
@@ -487,13 +495,41 @@ async function createRRMessage() {
 }
 
 async function loadReactionRoles() {
-  const rr = currentConfig.reaction_roles || {};
   const c = document.getElementById('rrList');
-  if (!Object.keys(rr).length) return c.innerHTML = `<p style="color:var(--text-muted)">Aucun reaction role</p>`;
-  c.innerHTML = Object.entries(rr).map(([k, rId]) => {
-    const parts = k.split('_'); const emoji = parts.slice(1).join('_'); const role = guildRoles.find(r => r.id == rId);
-    return `<div class="rr-item"><div class="rr-emoji">${emoji}</div><div class="rr-info"><strong>${role?role.name:rId}</strong><small>Msg: ${parts[0]}</small></div><button class="btn btn-danger" onclick="removeRR('${k}')">✕</button></div>`;
-  }).join('');
+  c.innerHTML = '<p style="color:var(--text-muted)">Chargement...</p>';
+
+  try {
+    // Fetch frais depuis l'API pour avoir les données à jour
+    const res = await fetch(`${API}/config/${currentGuild}`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const freshConfig = await res.json();
+    currentConfig = freshConfig;
+
+    const rr = freshConfig.reaction_roles || {};
+
+    if (!Object.keys(rr).length) {
+      c.innerHTML = '<p style="color:var(--text-muted);padding:20px;text-align:center">Aucun reaction role configuré.</p>';
+      return;
+    }
+
+    c.innerHTML = Object.entries(rr).map(([k, rId]) => {
+      const parts = k.split('_');
+      const msgId = parts[0];
+      const emoji = parts.slice(1).join('_');
+      const role = guildRoles.find(r => String(r.id) === String(rId));
+      return `<div class="rr-item">
+        <div class="rr-emoji">${emoji}</div>
+        <div class="rr-info">
+          <strong>${role ? role.name : '⚠️ Rôle ID: ' + rId}</strong>
+          <small>Message ID: ${msgId}</small>
+        </div>
+        <button class="btn btn-danger" style="padding:5px 10px;font-size:12px" onclick="removeRR('${k}')">✕</button>
+      </div>`;
+    }).join('');
+  } catch(e) {
+    c.innerHTML = `<p style="color:#ff6b6b;padding:20px">❌ Erreur: ${e.message}</p>`;
+    console.error('loadReactionRoles:', e);
+  }
 }
 async function removeRR(k) { delete currentConfig.reaction_roles[k]; await saveConfig({ reaction_roles: currentConfig.reaction_roles }); loadReactionRoles(); }
 
