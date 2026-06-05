@@ -1905,7 +1905,8 @@ async def eightball(interaction: discord.Interaction, question: str):
     app_commands.Choice(name="Économie", value="💰 Économie"),
     app_commands.Choice(name="Niveaux", value="⭐ Niveaux"),
     app_commands.Choice(name="Fun & Jeux", value="🎮 Fun & Jeux"),
-    app_commands.Choice(name="Informations", value="ℹ️ Informations")
+    app_commands.Choice(name="Informations", value="ℹ️ Informations"),
+    app_commands.Choice(name="Admin Tycoon (Jeu)", value="🌐 Le Jeu") # 🟢 NOUVEAU
 ])
 async def aide_cmd(interaction: discord.Interaction, categorie: app_commands.Choice[str] = None):
     categories = {
@@ -1949,6 +1950,11 @@ async def aide_cmd(interaction: discord.Interaction, categorie: app_commands.Cho
             ("`/avatar`","Avatar"),("`/ping`","Ping"),("`/note`","Ajouter Note"),
             ("`/notes`","Mes Notes"),("`/envoyer`","Faire parler le bot")
         ],
+        # 👇 🟢 NOUVELLE CATÉGORIE ICI 👇
+        "🌐 Le Jeu": [
+            ("`/sync`","Réclamer ses rôles (Nécessite de lier son compte en jeu)"),
+            ("Lien du jeu", "https://admin-tycoon.onrender.com/")
+        ]
     }
     
     if categorie:
@@ -1956,6 +1962,11 @@ async def aide_cmd(interaction: discord.Interaction, categorie: app_commands.Cho
         embed = discord.Embed(title=f"❓ {cat_name}", color=0x5865F2)
         for cmd, desc in categories[cat_name]: 
             embed.add_field(name=cmd, value=desc, inline=True)
+            
+        # Description détaillée si on choisit le jeu
+        if cat_name == "🌐 Le Jeu":
+            embed.description = "**Admin Tycoon** est notre jeu de gestion de serveurs sur navigateur.\nDéveloppe ton Data Center et gagne de l'XP en résolvant des pannes système !\n\nPour obtenir tes rôles Discord en fonction de ton niveau en jeu, va sur le jeu, clique sur **🔗 Rôles Discord**, puis reviens ici et tape `/sync`."
+            
     else:
         embed = discord.Embed(title="❓ Aide Administrateur", description="Utilisez `/aide [catégorie]` pour les détails.", color=0x5865F2, timestamp=discord.utils.utcnow())
         for cat_name, cmds_list in categories.items():
