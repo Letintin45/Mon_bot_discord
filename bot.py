@@ -223,43 +223,44 @@ async def auto_sync_roles():
 
 async def update_member_level_role(member: discord.Member, user_level: int):
     """
-    Vérifie le niveau du joueur et lui attribue le rôle correspondant,
-    tout en retirant les anciens rôles de niveau inférieurs.
+    Vérifie le niveau du joueur et lui attribue le rôle correspondant.
+    - 🖥️ Stagiaire IT  : rôle permanent, jamais supprimé
+    - 📈 Administrateur IT : supprimé à l'obtention de 🎓 Ingénieur Réseau
+    - 🎓 Ingénieur Réseau  : supprimé à l'obtention de 👑 Dieu du Système
     """
-    # 1. On trouve quel rôle il mérite selon son niveau
+    STAGIAIRE_ROLE_ID = 1507850671548792944  # 🖥️ Stagiaire IT — jamais retiré
+
+    # 1. On trouve quel rôle il mérite selon son niveau (du plus haut au plus bas)
     target_role_id = None
-    
-    # On vérifie du plus haut au plus bas (si niv 12, il a le rôle 10)
     for level_req, role_id in sorted(LEVEL_ROLES.items(), reverse=True):
         if user_level >= level_req:
             target_role_id = role_id
             break
-            
+
     if not target_role_id:
-        return # Le joueur n'a pas un niveau suffisant pour avoir un rôle
+        return  # Niveau insuffisant pour tout rôle
 
     target_role = member.guild.get_role(target_role_id)
     if not target_role:
         print(f"Erreur: Le rôle avec l'ID {target_role_id} n'existe pas sur le serveur.")
         return
 
-    # 2. Si le joueur a DÉJÀ le bon rôle, on ne fait rien pour éviter de spammer l'API Discord
-    if target_role in member.roles:
-        return
+    # 2. On donne le rôle cible s'il ne l'a pas déjà
+    if target_role not in member.roles:
+        await member.add_roles(target_role)
+        print(f"Promotion ! {member.name} a reçu le rôle {target_role.name}")
 
-    # 3. On lui donne le nouveau rôle
-    await member.add_roles(target_role)
-    print(f"Promotion ! {member.name} a reçu le rôle {target_role.name}")
-    
-    # 4. (Optionnel mais recommandé) On retire les anciens rôles de niveau
-    # Pour ne pas qu'il soit "Stagiaire" ET "Dieu du Système" en même temps
+    # 3. On retire les anciens rôles SAUF le Stagiaire IT (rôle permanent)
     roles_to_remove = []
     for level, role_id in LEVEL_ROLES.items():
-        if role_id != target_role_id: # On vérifie tous les rôles SAUF le nouveau
-            old_role = member.guild.get_role(role_id)
-            if old_role and old_role in member.roles:
-                roles_to_remove.append(old_role)
-                
+        if role_id == target_role_id:
+            continue  # On garde le nouveau rôle
+        if role_id == STAGIAIRE_ROLE_ID:
+            continue  # On garde toujours le Stagiaire IT
+        old_role = member.guild.get_role(role_id)
+        if old_role and old_role in member.roles:
+            roles_to_remove.append(old_role)
+
     if roles_to_remove:
         await member.remove_roles(*roles_to_remove)
 
@@ -1972,10 +1973,11 @@ auth_cache = {}
 
 @app_flask.before_request
 def require_auth():
+    # 🟢 On retourne "None" au lieu de 204 pour laisser Flask-CORS faire son travail
     if request.method == 'OPTIONS':
-        return jsonify({}), 200
+        return 
         
-    if request.path in ('/ping', '/api/debug', '/api/login'):
+    if request.path in ('/ping', '/api/debug'):
         return
 
     auth_header = request.headers.get('Authorization', '')
@@ -2020,27 +2022,10 @@ def api_debug():
     
 @app_flask.route('/api/login', methods=['POST'])
 def api_login():
+    # Plus de vérification manuelle OPTIONS ici, Flask-CORS gère tout !
     token = request.headers.get('Authorization', '').replace('Bearer ', '').strip()
-    
-    if not token:
-        return jsonify({'success': False, 'error': 'Token manquant.'}), 401
-
-    # Si déjà en cache, on renvoie directement
-    if token in auth_cache:
-        return jsonify({'success': True, 'user_id': auth_cache[token]})
-
-    # Sinon on valide auprès de Discord
-    req = urllib.request.Request("https://discord.com/api/users/@me")
-    req.add_header("Authorization", f"Bearer {token}")
-    req.add_header("User-Agent", "AdminTycoonBot (https://letintin45.github.io, 1.0)")
-    try:
-        with urllib.request.urlopen(req) as response:
-            user_data = json.loads(response.read())
-            auth_cache[token] = int(user_data['id'])
-            return jsonify({'success': True, 'user_id': auth_cache[token]})
-    except Exception as e:
-        print(f"❌ Erreur Token Discord (login) : {e}")
-        return jsonify({'success': False, 'error': 'Token invalide.'}), 401
+    user_id = auth_cache.get(token)
+    return jsonify({'success': True, 'user_id': user_id})
 
 @app_flask.route('/api/test/welcome/<guild_id>', methods=['POST'])
 def api_test_welcome(guild_id):

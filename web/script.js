@@ -54,6 +54,14 @@ function showPage(pageId, elem = null) {
         });
     }
     localStorage.setItem('activeTab', pageId);
+
+    // Chargement des données à la demande selon la page
+    if (!currentGuild) return;
+    if (pageId === 'invites')       { loadInvites(); loadJoinedMembers(); }
+    if (pageId === 'reactionroles') { loadReactionRoles(); }
+    if (pageId === 'warns')         { loadWarns(); }
+    if (pageId === 'economy')       { loadEconomy(); }
+    if (pageId === 'members')       { loadMembersList(); }
 }
 // --------------------------------------------------------
 
