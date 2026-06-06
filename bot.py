@@ -1992,95 +1992,91 @@ async def eightball(interaction: discord.Interaction, question: str):
     embed.add_field(name="❓", value=question); embed.add_field(name="🔮", value=random.choice(answers))
     await interaction.response.send_message(embed=embed)
 
-@bot.tree.command(name="aide", description="Affiche les commandes du bot.")
-@app_commands.choices(categorie=[
-    app_commands.Choice(name="Setup (Admin)", value="⚙️ Setup"),
-    app_commands.Choice(name="Modération (Staff)", value="🔨 Modération"),
-    app_commands.Choice(name="Outils Admin (Staff)", value="🛠️ Outils Admin"), # 🟢 NOUVELLE CATÉGORIE
-    app_commands.Choice(name="Invitations", value="📨 Invitations"),
-    app_commands.Choice(name="Économie", value="💰 Économie"),
-    app_commands.Choice(name="Niveaux", value="⭐ Niveaux"),
-    app_commands.Choice(name="Fun & Jeux", value="🎮 Fun & Jeux"),
-    app_commands.Choice(name="Informations", value="ℹ️ Informations"),
-    app_commands.Choice(name="Admin Tycoon (Jeu)", value="🌐 Le Jeu")
-])
-async def aide_cmd(interaction: discord.Interaction, categorie: app_commands.Choice[str] = None):
-    # 🟢 VÉRIFICATION : Est-ce que l'utilisateur est un Admin ou un Staff ?
+# 🟢 1. LA FONCTION D'AUTOCOMPLÉTION DYNAMIQUE
+async def aide_autocomplete(interaction: discord.Interaction, current: str) -> list[app_commands.Choice[str]]:
+    # On vérifie si le joueur est admin/staff PENDANT qu'il tape la commande
     is_admin = interaction.user.guild_permissions.administrator or is_staff(interaction.user)
 
-    # 🟢 Commandes PUBIQUES (Visibles par tous les joueurs)
+    # La liste pour TOUS les joueurs
+    choix = [
+        app_commands.Choice(name="Invitations", value="📨 Invitations"),
+        app_commands.Choice(name="Économie", value="💰 Économie"),
+        app_commands.Choice(name="Niveaux", value="⭐ Niveaux"),
+        app_commands.Choice(name="Fun & Jeux", value="🎮 Fun & Jeux"),
+        app_commands.Choice(name="Informations", value="ℹ️ Informations"),
+        app_commands.Choice(name="Admin Tycoon (Jeu)", value="🌐 Le Jeu")
+    ]
+
+    # Si c'est un Staff, on rajoute secrètement les catégories Admin dans sa liste
+    if is_admin:
+        choix.insert(0, app_commands.Choice(name="Setup (Admin)", value="⚙️ Setup"))
+        choix.insert(1, app_commands.Choice(name="Modération (Staff)", value="🔨 Modération"))
+        choix.insert(2, app_commands.Choice(name="Outils Admin (Staff)", value="🛠️ Outils Admin"))
+
+    # Retourne les choix (permet aussi la recherche si l'utilisateur commence à taper des lettres)
+    return [c for c in choix if current.lower() in c.name.lower()]
+
+
+# 🟢 2. LA COMMANDE AIDE PRINCIPALE
+@bot.tree.command(name="aide", description="Affiche les commandes du bot.")
+@app_commands.autocomplete(categorie=aide_autocomplete) # 👈 On relie la commande à la fonction au-dessus !
+async def aide_cmd(interaction: discord.Interaction, categorie: str = None): # 👈 "categorie" est maintenant un texte (str)
+    
+    is_admin = interaction.user.guild_permissions.administrator or is_staff(interaction.user)
+
+    # Commandes PUBIQUES (Visibles par tous les joueurs)
     categories = {
-        "📨 Invitations": [
-            ("`/invites`","Invitations perso"),("`/topinvites`","Top inviteurs")
-        ],
-        "💰 Économie": [
-            ("`/solde`","Solde"),("`/journalier`","Quotidien"),("`/travail`","Travailler"),
-            ("`/déposer`","Déposer"),("`/retirer`","Retirer"),("`/parier`","Parier"),
-            ("`/payer`","Donner"),("`/leaderboard`","Top économie"),
-            ("`/shop`","Voir la boutique"),("`/buy`","Acheter un article")
-        ],
-        "⭐ Niveaux": [
-            ("`/rank`","Niveau"),("`/leveltop`","Top niveaux")
-        ],
-        "🎮 Fun & Jeux": [
-            ("`/aide-jeux`", "Guide des jeux"),("`/pile-face`","Pile/Face"),
-            ("`/roll`","Dés"),("`/8ball`","Magique")
-        ],
-        "ℹ️ Informations": [
-            ("`/rappel-creer`","Créer rappel"),("`/userinfo`","Infos User"),
-            ("`/serverinfo`","Infos Serveur"),("`/avatar`","Avatar"),("`/ping`","Ping")
-        ],
-        "🌐 Le Jeu": [
-            ("`/sync`","Réclamer ses rôles (Nécessite de lier son compte en jeu)"),
-            ("`/boost-jeu`","Acheter +20% de revenus sur le jeu (5000 🪙)"),
-            ("Lien du jeu", "https://admin-tycoon.onrender.com/")
-        ]
+        "📨 Invitations": [("`/invites`","Invitations perso"),("`/topinvites`","Top inviteurs")],
+        "💰 Économie": [("`/solde`","Solde"),("`/journalier`","Quotidien"),("`/travail`","Travailler"),
+                        ("`/déposer`","Déposer"),("`/retirer`","Retirer"),("`/parier`","Parier"),
+                        ("`/payer`","Donner"),("`/leaderboard`","Top économie"),
+                        ("`/shop`","Voir la boutique"),("`/buy`","Acheter un article")],
+        "⭐ Niveaux": [("`/rank`","Niveau"),("`/leveltop`","Top niveaux")],
+        "🎮 Fun & Jeux": [("`/aide-jeux`", "Guide des jeux"),("`/pile-face`","Pile/Face"),
+                          ("`/roll`","Dés"),("`/8ball`","Magique")],
+        "ℹ️ Informations": [("`/rappel-creer`","Créer rappel"),("`/userinfo`","Infos User"),
+                            ("`/serverinfo`","Infos Serveur"),("`/avatar`","Avatar"),("`/ping`","Ping")],
+        "🌐 Le Jeu": [("`/sync`","Réclamer ses rôles (Nécessite de lier son compte en jeu)"),
+                      ("`/boost-jeu`","Acheter +20% de revenus sur le jeu (5000 🪙)"),
+                      ("Lien du jeu", "https://admin-tycoon.onrender.com/")]
     }
 
-    # 🔴 Commandes CACHÉES (Visibles uniquement par le Staff/Admin)
+    # Commandes CACHÉES (Visibles uniquement par le Staff/Admin)
     admin_categories = {
-        "⚙️ Setup": [
-            ("`/config-regles`","Règles"),("`/config-tickets`","Tickets"),
-            ("`/config-bienvenue`","Bienvenue"),("`/config-depart`","Départ"),
-            ("`/config-logs`","Logs global"),("`/config-modlog`","Logs modération"),
-            ("`/config-suggestions`","Suggestions"),("`/config-levelup`","Level-up"),
-            ("`/config-autorole`","Auto-rôle"),("`/config-levelrole`","Rôle niveau"),
-            ("`/config-maxtickets`","Max tickets"),("`/config-antispam`","Anti-spam"),
-            ("`/config-mot-interdit`","Mot interdit"), ("`/config-exclure-salon`", "Exclure XP"),
-            ("`/config-inclure-salon`", "Inclure XP"), ("`/config-leaderboard`","[NOUVEAU] Auto-actualisation du Top 10")
-        ],
-        "🔨 Modération": [
-            ("`/ban`","Bannir"),("`/deban`","Débannir"),("`/expulser`","Expulser"),
-            ("`/mute`","Rendre muet"),("`/demute`","Démute"),("`/avertir`","Avertir"),
-            ("`/infractions-retirer`","Unwarn"),("`/infractions-lister`","Voir warns"),
-            ("`/infractions-reinitialiser`","Purger warns"), ("`/purge`","Purger messages"),
-            ("`/slowmode`","Slowmode"),("`/lock`","Lock salon"),("`/unlock`","Unlock salon")
-        ],
-        "🛠️ Outils Admin": [
-            ("`/invitations-reinitialiser`","Purger les invitations"),
-            ("`/level-reset`","Réinitialiser le niveau d'un joueur"),
-            ("`/envoyer`","Faire parler le bot"),
-            ("`/embed`","Créer un Embed personnalisé"),
-            ("`/giveaway`","Lancer un Giveaway"),
-            ("`/poll`","Lancer un Sondage officiel"),
-            ("`/note`","Ajouter une note de modération"),
-            ("`/notes`","Voir les notes d'un joueur")
-        ]
+        "⚙️ Setup": [("`/config-regles`","Règles"),("`/config-tickets`","Tickets"),
+                     ("`/config-bienvenue`","Bienvenue"),("`/config-depart`","Départ"),
+                     ("`/config-logs`","Logs global"),("`/config-modlog`","Logs modération"),
+                     ("`/config-suggestions`","Suggestions"),("`/config-levelup`","Level-up"),
+                     ("`/config-autorole`","Auto-rôle"),("`/config-levelrole`","Rôle niveau"),
+                     ("`/config-maxtickets`","Max tickets"),("`/config-antispam`","Anti-spam"),
+                     ("`/config-mot-interdit`","Mot interdit"), ("`/config-exclure-salon`", "Exclure XP"),
+                     ("`/config-inclure-salon`", "Inclure XP"), ("`/config-leaderboard`","Auto-actualisation du Top 10")],
+        "🔨 Modération": [("`/ban`","Bannir"),("`/deban`","Débannir"),("`/expulser`","Expulser"),
+                          ("`/mute`","Rendre muet"),("`/demute`","Démute"),("`/avertir`","Avertir"),
+                          ("`/infractions-retirer`","Unwarn"),("`/infractions-lister`","Voir warns"),
+                          ("`/infractions-reinitialiser`","Purger warns"), ("`/purge`","Purger messages"),
+                          ("`/slowmode`","Slowmode"),("`/lock`","Lock salon"),("`/unlock`","Unlock salon")],
+        "🛠️ Outils Admin": [("`/invitations-reinitialiser`","Purger les invitations"),
+                            ("`/level-reset`","Réinitialiser le niveau d'un joueur"),
+                            ("`/envoyer`","Faire parler le bot"),
+                            ("`/embed`","Créer un Embed personnalisé"),
+                            ("`/giveaway`","Lancer un Giveaway"),
+                            ("`/poll`","Lancer un Sondage officiel"),
+                            ("`/note`","Ajouter une note de modération"),
+                            ("`/notes`","Voir les notes d'un joueur")]
     }
 
-    # Si c'est un staff, on ajoute les catégories secrètes à son menu
     if is_admin:
         categories.update(admin_categories)
 
     if categorie:
-        cat_name = categorie.value
-        # Si un joueur normal essaie de forcer l'affichage d'une catégorie admin
+        cat_name = categorie 
+        
         if cat_name in admin_categories and not is_admin:
             return await interaction.response.send_message("❌ Tu n'as pas la permission de voir cette catégorie.", ephemeral=True)
             
         embed = discord.Embed(title=f"❓ {cat_name}", color=0x5865F2)
         
-        # On vérifie que la catégorie existe bien dans ce que l'utilisateur a le droit de voir
         if cat_name in categories:
             for cmd, desc in categories[cat_name]: 
                 embed.add_field(name=cmd, value=desc, inline=True)
