@@ -166,6 +166,7 @@ async function populateSelects() {
     document.getElementById('ch_modlog').innerHTML = chOpt('mod_log_channel');
     document.getElementById('ch_suggestions').innerHTML = chOpt('suggestion_channel');
     document.getElementById('ch_levels').innerHTML = chOpt('level_channel');
+    document.getElementById('ch_leaderboard').innerHTML = chOpt('live_lb_channel'); // 🟢 AJOUTÉ ICI
 
     document.getElementById('msg_channel').innerHTML = chOpt('');
     document.getElementById('poll_channel').innerHTML = chOpt('');
@@ -315,6 +316,7 @@ async function saveChannels() {
     mod_log_channel:    document.getElementById('ch_modlog').value,
     suggestion_channel: document.getElementById('ch_suggestions').value,
     level_channel:      document.getElementById('ch_levels').value,
+    live_lb_channel:    document.getElementById('ch_leaderboard').value // 🟢 AJOUTÉ ICI
   };
   
   // 🟢 On envoie le texte brut sans parseInt pour protéger l'ID Discord

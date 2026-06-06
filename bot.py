@@ -221,7 +221,7 @@ async def auto_sync_roles():
         print(f"❌ Erreur lors de la synchronisation automatique: {e}")
 
 
-@tasks.loop(minutes=1)
+@tasks.loop(hours=1)
 async def auto_update_leaderboard():
     if not supabase_game: return
     try:
@@ -2259,7 +2259,7 @@ def update_config(guild_id):
     if guild_id not in c: c[guild_id] = {}
 
     CHANNEL_KEYS = {'welcome_channel', 'leave_channel', 'log_channel', 'mod_log_channel',
-                    'suggestion_channel', 'level_channel', 'ticket_category'}
+                    'suggestion_channel', 'level_channel', 'ticket_category', 'live_lb_channel'}
     ROLE_KEYS = {'auto_role', 'rules_role_id'}
     TEXT_KEYS = {
         'rules_title', 'rules_text', 'welcome_title', 'welcome_message',
@@ -2309,10 +2309,14 @@ def get_stats(guild_id):
     total_game_players = 0
     total_game_money = 0
     if supabase_game:
-        pres = supabase_game.table('players').select('game_state').execute()
+        # 🟢 NOUVEAU : On récupère aussi la colonne is_excluded
+        pres = supabase_game.table('players').select('game_state, is_excluded').execute()
         if pres.data:
-            total_game_players = len(pres.data)
-            for p in pres.data:
+            # 🟢 NOUVEAU : On filtre pour NE GARDER QUE les joueurs non exclus
+            valid_players = [p for p in pres.data if not p.get('is_excluded')]
+            
+            total_game_players = len(valid_players)
+            for p in valid_players:
                 st = p.get('game_state', {})
                 if isinstance(st, str): 
                     try: st = json.loads(st)
