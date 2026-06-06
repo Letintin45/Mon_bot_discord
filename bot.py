@@ -221,7 +221,7 @@ async def auto_sync_roles():
         print(f"❌ Erreur lors de la synchronisation automatique: {e}")
 
 
-@tasks.loop(hours=1)
+@tasks.loop(minutes=1)
 async def auto_update_leaderboard():
     if not supabase_game: return
     try:
