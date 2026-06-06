@@ -320,7 +320,7 @@ async function saveChannels() {
     level_channel:      document.getElementById('ch_levels').value,
     live_lb_channel:    document.getElementById('ch_leaderboard').value, // <-- LA VIRGULE EST ICI !
     lb_sort_by:         document.getElementById('lb_sort_by').value,
-    lb_interval:        parseInt(document.getElementById('lb_interval').value)
+    lb_interval:        parseFloat(document.getElementById('lb_interval').value)
   };
   
   // 🟢 On envoie le texte brut sans parseInt pour protéger l'ID Discord

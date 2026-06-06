@@ -1111,35 +1111,36 @@ async def setup_rules(interaction: discord.Interaction, salon: discord.TextChann
         app_commands.Choice(name="⭐ Classer par Niveau (XP)", value="level")
     ],
     frequence=[
-        app_commands.Choice(name="Toutes les 2 minutes", value=0.033333),  # 2 minutes pour les tests, à changer en 0.0416667 pour 1 heure
+        app_commands.Choice(name="Toutes les 2 minutes", value=0.033333),
         app_commands.Choice(name="Toutes les 30 minutes", value=0.5),
-        app_commands.Choice(name="Toutes les heures", value=1),
-        app_commands.Choice(name="Toutes les 2 heures", value=2),
-        app_commands.Choice(name="Toutes les 6 heures", value=6),
-        app_commands.Choice(name="Toutes les 12 heures", value=12),
-        app_commands.Choice(name="Une fois par jour (24h)", value=24)
+        app_commands.Choice(name="Toutes les heures", value=1.0),
+        app_commands.Choice(name="Toutes les 2 heures", value=2.0),
+        app_commands.Choice(name="Toutes les 6 heures", value=6.0),
+        app_commands.Choice(name="Toutes les 12 heures", value=12.0),
+        app_commands.Choice(name="Une fois par jour (24h)", value=24.0)
     ]
 )
-async def config_lb_cmd(interaction: discord.Interaction, salon: discord.TextChannel, critere: app_commands.Choice[str], frequence: app_commands.Choice[int]):
+# 🟢 On utilise "str" et "float", beaucoup plus simple !
+async def config_lb_cmd(interaction: discord.Interaction, salon: discord.TextChannel, critere: str, frequence: float):
     await interaction.response.defer(ephemeral=True)
     
-    # 1. Sauvegarde des paramètres dans ton système de configuration
-    # (Adapte ceci selon comment tu sauvegardes les configs des salons actuellement)
     guild_id = str(interaction.guild.id)
+    c = cfg()
+    if guild_id not in c: c[guild_id] = {}
+        
+    c[guild_id]['live_lb_channel'] = salon.id
+    c[guild_id]['lb_sort_by'] = critere
     
-    # Exemple si tu utilises un dictionnaire ou ta base de données pour la config du serveur :
-    # update_config(guild_id, 'live_lb_channel', salon.id)
-    # update_config(guild_id, 'lb_sort_by', critere.value)
-    # update_config(guild_id, 'lb_interval', frequence.value)
-    
-    # 2. 🟢 LA MAGIE DISCORD : Changer l'intervalle de la boucle en direct !
+    with open('config.json', 'w', encoding='utf-8') as f:
+        json.dump(c, f, indent=4)
+        
     if auto_update_leaderboard.is_running():
-        auto_update_leaderboard.change_interval(hours=frequence.value)
+        auto_update_leaderboard.change_interval(hours=frequence)
     else:
         auto_update_leaderboard.start()
+        auto_update_leaderboard.change_interval(hours=frequence)
 
-    await interaction.followup.send(f"✅ **Leaderboard configuré !**\n📍 Salon : {salon.mention}\n📊 Trié par : **{critere.name}**\n⏱️ Fréquence : **{frequence.name}**")
-
+    await interaction.followup.send(f"✅ **Leaderboard configuré !**\n📍 Salon : {salon.mention}\n📊 Trié par : **{critere}**")
 
 @bot.tree.command(name="config-exclure-salon", description="Exclure un salon du système d'XP.")
 @app_commands.default_permissions(administrator=True)
@@ -2345,9 +2346,9 @@ def update_config(guild_id):
     scfg(c)
     print(f"✅ Config sauvegardée pour {guild_id} : {list(patch.keys())}")
     
-    # 🟢 NOUVEAUTÉ : Mise à jour de l'horloge du Leaderboard si la fréquence a été modifiée depuis le Web
+    # 🟢 NOUVEAUTÉ : Mise à jour de l'horloge du Leaderboard (Utilise float() !)
     if 'lb_interval' in patch:
-        nouvel_interval = int(patch['lb_interval'])
+        nouvel_interval = float(patch['lb_interval'])
         if auto_update_leaderboard.is_running():
             auto_update_leaderboard.change_interval(hours=nouvel_interval)
         else:
