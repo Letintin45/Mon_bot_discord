@@ -1111,6 +1111,8 @@ async def setup_rules(interaction: discord.Interaction, salon: discord.TextChann
         app_commands.Choice(name="⭐ Classer par Niveau (XP)", value="level")
     ],
     frequence=[
+        app_commands.Choice(name="Toutes les 2 minutes", value=0.033333),  # 2 minutes pour les tests, à changer en 0.0416667 pour 1 heure
+        app_commands.Choice(name="Toutes les 30 minutes", value=0.5),
         app_commands.Choice(name="Toutes les heures", value=1),
         app_commands.Choice(name="Toutes les 2 heures", value=2),
         app_commands.Choice(name="Toutes les 6 heures", value=6),
