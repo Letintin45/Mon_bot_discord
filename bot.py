@@ -1292,13 +1292,6 @@ async def config_suggestions(interaction: discord.Interaction, salon: discord.Te
     
     await interaction.response.send_message(f"✅ Salon {salon.mention} configuré !", ephemeral=True)
 
-@bot.tree.command(name="config-leaderboard", description="Salon où le classement du jeu web s'actualisera tout seul.")
-@app_commands.default_permissions(administrator=True)
-async def set_live_lb(interaction: discord.Interaction, salon: discord.TextChannel):
-    c = cfg(); gid = str(interaction.guild.id)
-    if gid not in c: c[gid] = {}
-    c[gid]['live_lb_channel'] = salon.id; scfg(c)
-    await interaction.response.send_message(f"🏆 Classement en direct défini sur {salon.mention}", ephemeral=True)
 
 @bot.tree.command(name="boost-jeu", description="Achète un boost de +20% sur tes revenus du jeu web pendant 1h (Coût: 5000 🪙)")
 async def boost_jeu(interaction: discord.Interaction):
