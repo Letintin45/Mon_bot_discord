@@ -230,39 +230,62 @@ async def auto_update_leaderboard():
         
         valid_players = [p for p in res.data if not p.get('is_excluded')]
         
-        def get_money(p):
+        # 1. Extraction et simplification des données une seule fois
+        players_data = []
+        for p in valid_players:
             st = p.get('game_state', {})
             if isinstance(st, str):
                 try: st = json.loads(st)
-                except: return 0
-            return float(st.get('money', 0)) if isinstance(st, dict) else 0
-            
-        valid_players.sort(key=get_money, reverse=True)
-        top_10 = valid_players[:10]
-        
-        embed = discord.Embed(title="🏆 TOP 10 MONDIAL - Admin Tycoon", color=0xffd700, timestamp=discord.utils.utcnow())
-        embed.description = "Ce classement s'actualise automatiquement toutes les heures."
-        
-        medals = ["🥇","🥈","🥉", "4️⃣","5️⃣","6️⃣","7️⃣","8️⃣","9️⃣","🔟"]
-        for i, p in enumerate(top_10):
-            st = p.get('game_state', {})
-            if isinstance(st, str): st = json.loads(st)
-            lvl = st.get('level', 1) if isinstance(st, dict) else 1
-            money = st.get('money', 0) if isinstance(st, dict) else 0
-            vip = "💎" if isinstance(st, dict) and st.get('is_vip') else ""
-            embed.add_field(name=f"{medals[i]} {p.get('username')} {vip}", value=f"Niv {lvl} | {int(money):,} €", inline=False)
-            
+                except: st = {}
+            elif not isinstance(st, dict):
+                st = {}
+                
+            players_data.append({
+                'username': p.get('username'),
+                'money': float(st.get('money', 0)),
+                'level': int(st.get('level', 1)),
+                'xp': float(st.get('xp', 0)),
+                'is_vip': bool(st.get('is_vip'))
+            })
+
+        # 2. Envoi personnalisé pour chaque serveur
         c = cfg()
         for gid_str, data in c.items():
             ch_id = data.get('live_lb_channel')
-            if ch_id:
-                guild = bot.get_guild(int(gid_str))
-                if guild:
-                    ch = guild.get_channel(ch_id)
-                    if ch:
-                        # Nettoie les anciens classements du bot et envoie le nouveau
-                        await ch.purge(limit=5, check=lambda m: m.author == bot.user)
-                        await ch.send(embed=embed)
+            if not ch_id: continue
+            
+            guild = bot.get_guild(int(gid_str))
+            if not guild: continue
+            
+            ch = guild.get_channel(ch_id)
+            if not ch: continue
+
+            # 🟢 NOUVEAUTÉ : On lit le critère choisi (par défaut 'money')
+            sort_by = data.get('lb_sort_by', 'money')
+            
+            if sort_by == 'level':
+                # Tri par niveau (puis par XP en cas d'égalité)
+                players_data.sort(key=lambda x: (x['level'], x['xp']), reverse=True)
+                titre = "🏆 TOP 10 MONDIAL - Les plus Hauts Niveaux"
+            else:
+                # Tri par argent
+                players_data.sort(key=lambda x: x['money'], reverse=True)
+                titre = "🏆 TOP 10 MONDIAL - Les plus Riches"
+
+            top_10 = players_data[:10]
+            
+            embed = discord.Embed(title=titre, color=0xffd700, timestamp=discord.utils.utcnow())
+            embed.description = "Ce classement s'actualise automatiquement."
+            
+            medals = ["🥇","🥈","🥉", "4️⃣","5️⃣","6️⃣","7️⃣","8️⃣","9️⃣","🔟"]
+            for i, p in enumerate(top_10):
+                vip = "💎" if p['is_vip'] else ""
+                embed.add_field(name=f"{medals[i]} {p['username']} {vip}", value=f"Niv {p['level']} | {int(p['money']):,} €", inline=False)
+                
+            # Nettoie les anciens classements du bot et envoie le nouveau
+            await ch.purge(limit=5, check=lambda m: m.author == bot.user)
+            await ch.send(embed=embed)
+            
     except Exception as e:
         print(f"Erreur Auto-Leaderboard: {e}")
 
@@ -1079,6 +1102,42 @@ async def setup_rules(interaction: discord.Interaction, salon: discord.TextChann
     if gid not in c: c[gid] = {}
     c[gid].update({'rules_message_id': msg.id, 'rules_role_id': role.id})
     scfg(c)
+
+@bot.tree.command(name="config-leaderboard", description="Configure le classement mondial automatique du jeu")
+@app_commands.default_permissions(administrator=True)
+@app_commands.choices(
+    critere=[
+        app_commands.Choice(name="💰 Classer par Argent", value="money"),
+        app_commands.Choice(name="⭐ Classer par Niveau (XP)", value="level")
+    ],
+    frequence=[
+        app_commands.Choice(name="Toutes les heures", value=1),
+        app_commands.Choice(name="Toutes les 2 heures", value=2),
+        app_commands.Choice(name="Toutes les 6 heures", value=6),
+        app_commands.Choice(name="Toutes les 12 heures", value=12),
+        app_commands.Choice(name="Une fois par jour (24h)", value=24)
+    ]
+)
+async def config_lb_cmd(interaction: discord.Interaction, salon: discord.TextChannel, critere: app_commands.Choice[str], frequence: app_commands.Choice[int]):
+    await interaction.response.defer(ephemeral=True)
+    
+    # 1. Sauvegarde des paramètres dans ton système de configuration
+    # (Adapte ceci selon comment tu sauvegardes les configs des salons actuellement)
+    guild_id = str(interaction.guild.id)
+    
+    # Exemple si tu utilises un dictionnaire ou ta base de données pour la config du serveur :
+    # update_config(guild_id, 'live_lb_channel', salon.id)
+    # update_config(guild_id, 'lb_sort_by', critere.value)
+    # update_config(guild_id, 'lb_interval', frequence.value)
+    
+    # 2. 🟢 LA MAGIE DISCORD : Changer l'intervalle de la boucle en direct !
+    if auto_update_leaderboard.is_running():
+        auto_update_leaderboard.change_interval(hours=frequence.value)
+    else:
+        auto_update_leaderboard.start()
+
+    await interaction.followup.send(f"✅ **Leaderboard configuré !**\n📍 Salon : {salon.mention}\n📊 Trié par : **{critere.name}**\n⏱️ Fréquence : **{frequence.name}**")
+
 
 @bot.tree.command(name="config-exclure-salon", description="Exclure un salon du système d'XP.")
 @app_commands.default_permissions(administrator=True)
@@ -2291,6 +2350,15 @@ def update_config(guild_id):
     scfg(c)
     print(f"✅ Config sauvegardée pour {guild_id} : {list(patch.keys())}")
     
+    # 🟢 NOUVEAUTÉ : Mise à jour de l'horloge du Leaderboard si la fréquence a été modifiée depuis le Web
+    if 'lb_interval' in patch:
+        nouvel_interval = int(patch['lb_interval'])
+        if auto_update_leaderboard.is_running():
+            auto_update_leaderboard.change_interval(hours=nouvel_interval)
+        else:
+            auto_update_leaderboard.start()
+            auto_update_leaderboard.change_interval(hours=nouvel_interval)
+            
     # 🟢 Retourne les données protégées
     return jsonify({'success': True, 'config': sanitize_for_json(c[guild_id])})
 
