@@ -1296,41 +1296,6 @@ async def config_suggestions(interaction: discord.Interaction, salon: discord.Te
     await interaction.response.send_message(f"✅ Salon {salon.mention} configuré !", ephemeral=True)
 
 
-@bot.tree.command(name="boost-jeu", description="Achète un boost de +20% sur tes revenus du jeu web pendant 1h (Coût: 5000 🪙)")
-async def boost_jeu(interaction: discord.Interaction):
-    await interaction.response.defer(ephemeral=True)
-    # Vérifie si le compte est lié
-    res = supabase_game.table('players').select('username, game_state').eq('discord_id', str(interaction.user.id)).execute()
-    if not res.data:
-        return await interaction.followup.send("❌ Tu dois d'abord lier ton compte sur le jeu web (Bouton 🔗 Rôles Discord).")
-    
-    # Vérifie l'argent Discord
-    gid = str(interaction.guild.id)
-    uid = str(interaction.user.id)
-    e, wallet = get_wallet(gid, uid)
-    if wallet['coins'] < 5000:
-        return await interaction.followup.send("❌ Il te faut 5000 🪙 dans ton portefeuille Discord !")
-        
-    e[gid][uid]['coins'] -= 5000
-    seco(e)
-    
-    # Applique le boost sur le jeu
-    username = res.data[0]['username']
-    state = res.data[0]['game_state']
-    if isinstance(state, str): state = json.loads(state)
-    now = datetime.now(timezone.utc).timestamp()
-    state['discord_boost_until'] = now + 3600
-    
-    # Met à jour la BDD du jeu
-    supabase_game.table('players').update({'game_state': state}).eq('username', username).execute()
-    saves = supabase_game.table('saves').select('id, game_state').eq('username', username).execute()
-    for s in saves.data:
-        s_st = s['game_state']
-        if isinstance(s_st, str): s_st = json.loads(s_st)
-        s_st['discord_boost_until'] = now + 3600
-        supabase_game.table('saves').update({'game_state': s_st}).eq('id', s['id']).execute()
-        
-    await interaction.followup.send("🚀 **Achat réussi !** Tes serveurs génèrent maintenant **+20% de revenus** pendant 1 heure ! Retourne vite sur le jeu !")
 
     
 @bot.tree.command(name="config-levelup", description="Salon des annonces de level up.")
@@ -1707,6 +1672,7 @@ async def shop(interaction: discord.Interaction):
     embed.add_field(name="[2] Couleur Bleue 🔵", value="Prix: **10,000** 🪙\n*Donne une couleur bleue à ton pseudo.*", inline=False)
     embed.add_field(name="[3] Rôle Riche 💎", value="Prix: **50,000** 🪙\n*Montre à tout le monde ta richesse légendaire.*", inline=False)
     embed.add_field(name="[4] Ticket de Loterie 🎟️", value="Prix: **500** 🪙\n*Un ticket pour le prochain tirage au sort !*", inline=False)
+    embed.add_field(name="[5] Boost Jeu 🚀", value="Prix: **5,000** 🪙\n*+20% de revenus sur vos serveurs Web pendant 1 heure.*", inline=False)
     
     if interaction.guild.icon:
         embed.set_thumbnail(url=interaction.guild.icon.url)
@@ -1717,7 +1683,8 @@ async def shop(interaction: discord.Interaction):
     app_commands.Choice(name="1 - Couleur Rouge (10k 🪙)", value=1),
     app_commands.Choice(name="2 - Couleur Bleue (10k 🪙)", value=2),
     app_commands.Choice(name="3 - Rôle Riche (50k 🪙)", value=3),
-    app_commands.Choice(name="4 - Ticket de Loterie (500 🪙)", value=4)
+    app_commands.Choice(name="4 - Ticket de Loterie (500 🪙)", value=4),
+    app_commands.Choice(name="5 - Boost Jeu 1h (5k 🪙)", value=5) # 🟢 NOUVEAU
 ])
 async def buy(interaction: discord.Interaction, article: app_commands.Choice[int]):
     gid = str(interaction.guild.id)
@@ -1727,13 +1694,14 @@ async def buy(interaction: discord.Interaction, article: app_commands.Choice[int
     # ⚙️ CONFIGURATION DES RÔLES (À remplacer par tes vrais IDs)
     ROLE_ROUGE_ID = 1512092336509816952
     ROLE_BLEU_ID = 1512092117353234482
-    ROLE_RICHE_ID = 1512090948992106516 # <- Mets l'ID de ton rôle Riche ici
+    ROLE_RICHE_ID = 1512090948992106516 
     
     articles = {
         1: {"nom": "Couleur Rouge", "prix": 10000, "role_id": ROLE_ROUGE_ID, "type": "couleur"},
         2: {"nom": "Couleur Bleue", "prix": 10000, "role_id": ROLE_BLEU_ID, "type": "couleur"},
         3: {"nom": "Rôle Riche", "prix": 50000, "role_id": ROLE_RICHE_ID, "type": "role"},
-        4: {"nom": "Ticket de Loterie", "prix": 500, "role_id": None, "type": "item"}
+        4: {"nom": "Ticket de Loterie", "prix": 500, "role_id": None, "type": "item"},
+        5: {"nom": "Boost Jeu", "prix": 5000, "role_id": None, "type": "boost"} # 🟢 NOUVEAU
     }
     
     choix = articles[article.value]
@@ -1755,17 +1723,14 @@ async def buy(interaction: discord.Interaction, article: app_commands.Choice[int
             return await interaction.response.send_message("❌ Cette couleur n'est pas encore configurée par le Fondateur. Tu as été remboursé.", ephemeral=True)
             
         if role in interaction.user.roles:
-            e[gid][uid]['coins'] += choix['prix'] # Remboursement
+            e[gid][uid]['coins'] += choix['prix']
             seco(e)
             return await interaction.response.send_message(f"❌ Tu possèdes déjà la **{choix['nom']}** ! Tu as été remboursé.", ephemeral=True)
             
         try:
-            # On retire l'ancienne couleur achetée si le joueur change d'avis
             couleurs_possibles = [interaction.guild.get_role(ROLE_ROUGE_ID), interaction.guild.get_role(ROLE_BLEU_ID)]
             roles_a_retirer = [r for r in couleurs_possibles if r and r in interaction.user.roles]
-            if roles_a_retirer:
-                await interaction.user.remove_roles(*roles_a_retirer)
-                
+            if roles_a_retirer: await interaction.user.remove_roles(*roles_a_retirer)
             await interaction.user.add_roles(role)
             await interaction.response.send_message(f"🎨 Félicitations {interaction.user.mention} ! Ton pseudo est maintenant équipé de la **{choix['nom']}** !")
         except discord.Forbidden:
@@ -1801,6 +1766,31 @@ async def buy(interaction: discord.Interaction, article: app_commands.Choice[int
         n[uid].append({'texte': f'🎟️ {choix["nom"]} (Shop)', 'time': str(discord.utils.utcnow())})
         snts(n)
         await interaction.response.send_message(f"🎟️ Tu as acheté un **{choix['nom']}** pour {choix['prix']} 🪙 !\n*(Tu peux voir tes tickets en tapant `/notes`)*")
+
+    # 3D. 🟢 NOUVEAUTÉ : Le Boost de Jeu Web
+    elif choix['type'] == "boost":
+        res = supabase_game.table('players').select('username, game_state').eq('discord_id', uid).execute()
+        if not res.data:
+            e[gid][uid]['coins'] += choix['prix'] # Remboursement auto !
+            seco(e)
+            return await interaction.response.send_message("❌ Tu dois d'abord lier ton compte sur le jeu web (Bouton 🔗 Rôles Discord). Tu as été remboursé.", ephemeral=True)
+        
+        # Applique le boost sur le jeu
+        username = res.data[0]['username']
+        state = res.data[0]['game_state']
+        if isinstance(state, str): state = json.loads(state)
+        now = datetime.now(timezone.utc).timestamp()
+        state['discord_boost_until'] = now + 3600
+        
+        supabase_game.table('players').update({'game_state': state}).eq('username', username).execute()
+        saves = supabase_game.table('saves').select('id, game_state').eq('username', username).execute()
+        for s in saves.data:
+            s_st = s['game_state']
+            if isinstance(s_st, str): s_st = json.loads(s_st)
+            s_st['discord_boost_until'] = now + 3600
+            supabase_game.table('saves').update({'game_state': s_st}).eq('id', s['id']).execute()
+            
+        await interaction.response.send_message(f"🚀 **Achat réussi {interaction.user.mention} !** Tes serveurs génèrent maintenant **+20% de revenus** pendant 1 heure ! Retourne vite sur le jeu !")
 
 
 # --- ADMIN : GESTION ÉCONOMIE ---
@@ -2080,6 +2070,7 @@ async def aide_cmd(interaction: discord.Interaction, categorie: str = None): # �
     is_admin = interaction.user.guild_permissions.administrator or is_staff(interaction.user)
 
     # Commandes PUBIQUES (Visibles par tous les joueurs)
+    # Commandes PUBLIQUES (Visibles par tous les joueurs)
     categories = {
         "📨 Invitations": [("`/invites`","Invitations perso"),("`/topinvites`","Top inviteurs")],
         "💰 Économie": [("`/solde`","Solde"),("`/journalier`","Quotidien"),("`/travail`","Travailler"),
@@ -2091,8 +2082,10 @@ async def aide_cmd(interaction: discord.Interaction, categorie: str = None): # �
                           ("`/roll`","Dés"),("`/8ball`","Magique")],
         "ℹ️ Informations": [("`/rappel-creer`","Créer rappel"),("`/userinfo`","Infos User"),
                             ("`/serverinfo`","Infos Serveur"),("`/avatar`","Avatar"),("`/ping`","Ping")],
+                            
+        # 🟢 NOUVEAUTÉ : On actualise la rubrique Jeu
         "🌐 Le Jeu": [("`/sync`","Réclamer ses rôles (Nécessite de lier son compte en jeu)"),
-                      ("`/boost-jeu`","Acheter +20% de revenus sur le jeu (5000 🪙)"),
+                      ("`/shop`","Acheter le Boost Jeu (+20% de revenus) via la boutique"),
                       ("Lien du jeu", "https://admin-tycoon.onrender.com/")]
     }
 
@@ -2137,7 +2130,7 @@ async def aide_cmd(interaction: discord.Interaction, categorie: str = None): # �
                 embed.add_field(name=cmd, value=desc, inline=True)
             
         if cat_name == "🌐 Le Jeu":
-            embed.description = "**Admin Tycoon** est notre jeu de gestion de serveurs sur navigateur.\n\nPour obtenir tes rôles Discord, va sur le jeu, clique sur **🔗 Rôles Discord**, puis reviens ici et tape `/sync`.\nUtilise l'argent gagné sur Discord avec `/boost-jeu` pour booster tes revenus !"
+            embed.description = "**Admin Tycoon** est notre jeu de gestion de serveurs sur navigateur.\n\nPour obtenir tes rôles Discord, va sur le jeu, clique sur **🔗 Rôles Discord**, puis reviens ici et tape `/sync`.\n\nUtilise l'argent virtuel de Discord pour acheter le **Boost Jeu** dans le `/shop` !"
             
     else:
         embed = discord.Embed(title="❓ Menu d'aide", description="Sélectionne une catégorie avec `/aide [catégorie]`.", color=0x5865F2)
