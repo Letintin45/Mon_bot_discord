@@ -6,6 +6,7 @@ from datetime import timedelta, datetime, timezone
 from dotenv import load_dotenv
 from flask import Flask, jsonify, request
 import threading
+import hashlib
 
 # --- CONFIGURATION DES RÔLES STAFF ---
 ALLOWED_ROLE_IDS = {
@@ -1026,6 +1027,11 @@ async def on_raw_reaction_remove(payload):
 @bot.tree.command(name="sync", description="Synchronise tes rôles Discord (Niveau, VIP, Richesse)")
 async def sync_roles(interaction: discord.Interaction):
     await interaction.response.defer() 
+
+    # 🔐 On reproduit EXACTEMENT le même hachage sécurisé
+    secret_salt = "Tycoon_SecretKey_2026!Admintycoongame202645BonChanceqsdqsdqsd,;s:sdfsdfscfgretg"
+    texte_a_hacher = secret_salt + str(interaction.user.id)
+    hashed_uid = hashlib.sha256(texte_a_hacher.encode('utf-8')).hexdigest()
     
     try:
         discord_id_str = str(interaction.user.id)
@@ -1769,7 +1775,13 @@ async def buy(interaction: discord.Interaction, article: app_commands.Choice[int
 
     # 3D. 🟢 NOUVEAUTÉ : Le Boost de Jeu Web
     elif choix['type'] == "boost":
-        res = supabase_game.table('players').select('username, game_state').eq('discord_id', uid).execute()
+        # Hachage sécurisé de l'acheteur
+        secret_salt = "Tycoon_SecretKey_2026!Admintycoongame202645BonChanceqsdqsdqsd,;s:sdfsdfscfgretg"
+        texte_a_hacher = secret_salt + str(interaction.user.id)
+        hashed_uid = hashlib.sha256(texte_a_hacher.encode('utf-8')).hexdigest()
+
+        # On utilise hashed_uid !
+        res = supabase_game.table('players').select('username, game_state').eq('discord_id', hashed_uid).execute()
         if not res.data:
             e[gid][uid]['coins'] += choix['prix'] # Remboursement auto !
             seco(e)
@@ -2138,6 +2150,43 @@ async def aide_cmd(interaction: discord.Interaction, categorie: str = None): # �
             embed.add_field(name=cat_name, value=f"`{len(cmds_list)}` commandes", inline=True)
             
     await interaction.response.send_message(embed=embed, ephemeral=True)
+
+@bot.tree.command(name="ban-jeu", description="Bannir un joueur du jeu web")
+@app_commands.default_permissions(administrator=True)
+async def ban_jeu_cmd(interaction: discord.Interaction, membre: discord.Member, raison: str = "Non-respect des règles"):
+    await interaction.response.defer()
+    
+    # 🔐 On hache l'ID pour correspondre à Supabase
+    secret_salt = "Tycoon_SecretKey_2026!Admintycoongame202645BonChanceqsdqsdqsd,;s:sdfsdfscfgretg"
+    texte_a_hacher = secret_salt + str(membre.id)
+    hashed_uid = hashlib.sha256(texte_a_hacher.encode('utf-8')).hexdigest()
+    
+    res = supabase_game.table('players').update({'is_excluded': True}).eq('discord_id', hashed_uid).execute()
+    
+    if res.data:
+        await interaction.followup.send(f"🔨 **{membre.name}** a été banni du jeu web !\nRaison : {raison}")
+        try:
+            await membre.send(f"🚨 **ALERTE SYSTÈME**\nTu as été banni de *Admin Tycoon* par un administrateur.\n**Raison :** {raison}")
+        except:
+            pass # Le joueur a bloqué ses MP
+    else:
+        await interaction.followup.send("❌ Impossible de trouver ce joueur (compte non lié).", ephemeral=True)
+
+@bot.tree.command(name="unban-jeu", description="Débannir un joueur du jeu web")
+@app_commands.default_permissions(administrator=True)
+async def unban_jeu_cmd(interaction: discord.Interaction, membre: discord.Member):
+    await interaction.response.defer()
+    
+    secret_salt = "Tycoon_SecretKey_2026!Admintycoongame202645BonChanceqsdqsdqsd,;s:sdfsdfscfgretg"
+    texte_a_hacher = secret_salt + str(membre.id)
+    hashed_uid = hashlib.sha256(texte_a_hacher.encode('utf-8')).hexdigest()
+    
+    res = supabase_game.table('players').update({'is_excluded': False}).eq('discord_id', hashed_uid).execute()
+    
+    if res.data:
+        await interaction.followup.send(f"✅ **{membre.name}** a été débanni du jeu web et remis dans le Leaderboard !")
+    else:
+        await interaction.followup.send("❌ Impossible de trouver ce joueur.", ephemeral=True)
 
 # ============================================================
 # 13. DASHBOARD API FLASK (Tourne en arrière-plan) - SÉCURISÉE 🔒
