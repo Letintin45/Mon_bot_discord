@@ -1029,7 +1029,7 @@ async def sync_roles(interaction: discord.Interaction):
     await interaction.response.defer() 
 
     # 🔐 Hachage sécurisé de l'ID Discord
-    secret_salt = "Tycoon_SecretKey_2026!Admintycoongame202645BonChanceqsdqsdqsd,;s:sdfsdfscfgretg"
+    secret_salt = os.getenv("DISCORD_HASH_SALT")    
     texte_a_hacher = secret_salt + str(interaction.user.id)
     hashed_uid = hashlib.sha256(texte_a_hacher.encode('utf-8')).hexdigest()
     
@@ -1775,7 +1775,7 @@ async def buy(interaction: discord.Interaction, article: app_commands.Choice[int
 
     # 3D. 🟢 NOUVEAUTÉ : Le Boost de Jeu Web
     elif choix['type'] == "boost":
-        secret_salt = "Tycoon_SecretKey_2026!Admintycoongame202645BonChanceqsdqsdqsd,;s:sdfsdfscfgretg"
+        secret_salt = os.getenv("DISCORD_HASH_SALT")    
         texte_a_hacher = secret_salt + str(interaction.user.id)
         hashed_uid = hashlib.sha256(texte_a_hacher.encode('utf-8')).hexdigest()
 
@@ -2155,7 +2155,7 @@ async def aide_cmd(interaction: discord.Interaction, categorie: str = None): # �
 async def ban_jeu_cmd(interaction: discord.Interaction, membre: discord.Member, raison: str = "Non-respect des règles", duree_heures: int = 0):
     await interaction.response.defer()
     
-    secret_salt = "Tycoon_SecretKey_2026!Admintycoongame202645BonChanceqsdqsdqsd,;s:sdfsdfscfgretg"
+    secret_salt = os.getenv("DISCORD_HASH_SALT")    
     texte_a_hacher = secret_salt + str(membre.id)
     hashed_uid = hashlib.sha256(texte_a_hacher.encode('utf-8')).hexdigest()
     
@@ -2188,7 +2188,7 @@ async def ban_jeu_cmd(interaction: discord.Interaction, membre: discord.Member, 
 async def unban_jeu_cmd(interaction: discord.Interaction, membre: discord.Member):
     await interaction.response.defer()
     
-    secret_salt = "Tycoon_SecretKey_2026!Admintycoongame202645BonChanceqsdqsdqsd,;s:sdfsdfscfgretg"
+    secret_salt = os.getenv("DISCORD_HASH_SALT")
     texte_a_hacher = secret_salt + str(membre.id)
     hashed_uid = hashlib.sha256(texte_a_hacher.encode('utf-8')).hexdigest()
     
