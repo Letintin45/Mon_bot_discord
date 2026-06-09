@@ -651,16 +651,42 @@ async function loadJoinedMembers() {
 }
 
 async function loadWarns() {
-  const data = await (await fetch(`${API}/warns/${currentGuild}`)).json();
-  const sorted = Object.entries(data).filter(([,w])=>w.length>0);
-  document.getElementById('warnsTable').innerHTML = !sorted.length ? `<p>Aucun warn</p>` : `<table><thead><tr><th>User ID</th><th>Warns</th><th>Dernière raison</th><th>Action</th></tr></thead><tbody>`+sorted.map(([u,w])=>`<tr><td>${u}</td><td><span class="badge badge-red">${w.length}</span></td><td>${w[w.length-1].raison}</td><td><button class="btn btn-danger" style="padding:4px 10px; font-size:11px" onclick="popWarn('${u}')">−1 Warn</button></td></tr>`).join('')+`</tbody></table>`;
+  try {
+    const res = await fetch(`${API}/warns/${currentGuild}`);
+    const data = await res.json();
+    const sorted = Object.entries(data).filter(([,w]) => w.length > 0);
+    document.getElementById('warnsTable').innerHTML = !sorted.length
+      ? `<p style="color:var(--text-muted);padding:20px;text-align:center">Aucun warn actif.</p>`
+      : `<table><thead><tr><th>User ID</th><th>Warns</th><th>Dernière raison</th><th>Action</th></tr></thead><tbody>`
+        + sorted.map(([u,w]) => `<tr>
+            <td>${u}</td>
+            <td><span class="badge badge-red">${w.length}</span></td>
+            <td>${w[w.length-1].raison}</td>
+            <td><button class="btn btn-danger" style="padding:4px 10px;font-size:11px" onclick="popWarn('${u}')">−1 Warn</button></td>
+          </tr>`).join('')
+        + `</tbody></table>`;
+  } catch(e) {
+    document.getElementById('warnsTable').innerHTML = `<p style="color:var(--red)">❌ Erreur de chargement</p>`;
+  }
 }
 async function popWarn(uid) { await fetch(`${API}/warns/${currentGuild}/${uid}/pop`, {method:'POST'}); loadWarns(); toast('Warn retiré !'); }
 
 async function loadEconomy() {
-  const data = await (await fetch(`${API}/economy/${currentGuild}`)).json();
-  const sorted = Object.entries(data).map(([u,d])=>[u,(d.coins||0)+(d.bank||0)]).sort((a,b)=>b[1]-a[1]).slice(0,20);
-  document.getElementById('ecoTable').innerHTML = !sorted.length ? `<p>Aucune donnée</p>` : `<table><thead><tr><th>User ID</th><th>Total (💎)</th></tr></thead><tbody>`+sorted.map(([u,t],i)=>`<tr><td>${u}</td><td><strong>${t.toLocaleString()}</strong> 💎</td></tr>`).join('')+`</tbody></table>`;
+  try {
+    const res = await fetch(`${API}/economy/${currentGuild}`);
+    const data = await res.json();
+    const sorted = Object.entries(data)
+      .map(([u,d]) => [u, (d.coins||0) + (d.bank||0)])
+      .sort((a,b) => b[1]-a[1])
+      .slice(0, 20);
+    document.getElementById('ecoTable').innerHTML = !sorted.length
+      ? `<p style="color:var(--text-muted);padding:20px;text-align:center">Aucune donnée d'économie.</p>`
+      : `<table><thead><tr><th>User ID</th><th>Total (💎)</th></tr></thead><tbody>`
+        + sorted.map(([u,t]) => `<tr><td>${u}</td><td><strong>${t.toLocaleString()}</strong> 💎</td></tr>`).join('')
+        + `</tbody></table>`;
+  } catch(e) {
+    document.getElementById('ecoTable').innerHTML = `<p style="color:var(--red)">❌ Erreur de chargement</p>`;
+  }
 }
 
 async function saveConfig(d) {
@@ -883,36 +909,49 @@ async function loadGamePlayers() {
             return;
         }
         tbody.innerHTML = '';
-        players.forEach(player => {
+        players.forEach((player, idx) => {
             const isExcluded = player.is_excluded === true;
             const isBanned   = player.is_banned   === true;
             let state = player.game_state || {};
             if (typeof state === 'string') { try { state = JSON.parse(state); } catch { state = {}; } }
             const money = (state.money || 0).toLocaleString('fr-FR');
             const level = state.level || 1;
+            const safeUser = player.username.replace(/'/g, "\\'");
+
             const exclBadge    = isExcluded ? '<span class="badge badge-red">🔴 Exclu</span>' : '<span class="badge badge-green">🟢 Visible</span>';
             const exclBtnClass = isExcluded ? 'btn-success' : 'btn-danger';
             const exclBtnText  = isExcluded ? 'Réintégrer' : 'Exclure';
             const banBadge     = isBanned ? '<span class="badge badge-red">🔨 Banni</span>' : '<span class="badge" style="background:rgba(88,101,242,.15);color:var(--accent)">✅ Actif</span>';
             const banBtnClass  = isBanned ? 'btn-success' : 'btn-danger';
             const banBtnText   = isBanned ? '🔓 Débannir' : '🔨 Bannir';
-            tbody.innerHTML += `
-                <tr style="border-bottom:1px solid #333;">
-                    <td style="padding:10px;font-weight:bold;color:var(--accent)">${player.username}</td>
-                    <td style="padding:10px;">Niv ${level} — ${money} €</td>
-                    <td style="padding:10px;">${exclBadge}</td>
-                    <td style="padding:10px;">
-                        <button class="btn ${exclBtnClass}" style="padding:5px 10px;font-size:12px"
-                            onclick="toggleGameExclusion('${player.username}', ${isExcluded})">${exclBtnText}</button>
-                    </td>
-                    <td style="padding:10px;">
-                        ${banBadge}<br>
-                        <button class="btn ${banBtnClass}" style="padding:5px 10px;font-size:12px;margin-top:4px"
-                            onclick="${isBanned ? `unbanGamePlayer('${player.username}')` : `banGamePlayer('${player.username}')`}">
-                            ${banBtnText}
-                        </button>
-                    </td>
-                </tr>`;
+
+            const tr = document.createElement('tr');
+            tr.style.borderBottom = '1px solid #333';
+            tr.innerHTML = `
+                <td style="padding:10px;font-weight:bold;color:var(--accent)">${player.username}</td>
+                <td style="padding:10px;">Niv ${level} — ${money} €</td>
+                <td style="padding:10px;">${exclBadge}</td>
+                <td style="padding:10px;">
+                    <button class="btn ${exclBtnClass} btn-excl" data-username="${safeUser}" data-excluded="${isExcluded}"
+                        style="padding:5px 10px;font-size:12px">${exclBtnText}</button>
+                </td>
+                <td style="padding:10px;">
+                    ${banBadge}<br>
+                    <button class="btn ${banBtnClass} btn-ban" data-username="${safeUser}" data-banned="${isBanned}"
+                        style="padding:5px 10px;font-size:12px;margin-top:4px">${banBtnText}</button>
+                </td>`;
+            tbody.appendChild(tr);
+        });
+
+        // Attacher les events après injection pour éviter les conflits de guillemets
+        tbody.querySelectorAll('.btn-excl').forEach(btn => {
+            btn.addEventListener('click', () => toggleGameExclusion(btn.dataset.username, btn.dataset.excluded === 'true'));
+        });
+        tbody.querySelectorAll('.btn-ban').forEach(btn => {
+            btn.addEventListener('click', () => {
+                if (btn.dataset.banned === 'true') unbanGamePlayer(btn.dataset.username);
+                else banGamePlayer(btn.dataset.username);
+            });
         });
     } catch (err) {
         console.error('loadGamePlayers:', err);
@@ -941,15 +980,23 @@ async function toggleGameExclusion(username, currentState) {
 async function banGamePlayer(username) {
     const raison = prompt(`Raison du ban pour "${username}" :`, "Non-respect des règles");
     if (raison === null) return;
+
+    const dureeStr = prompt(`Durée du ban en heures (0 = permanent) :`, "0");
+    if (dureeStr === null) return;
+    const duree = Math.max(0, parseInt(dureeStr) || 0);
+    const dureeLabel = duree > 0 ? `${duree}h` : 'permanent';
+
+    if (!confirm(`Bannir "${username}" — ${dureeLabel} — Raison : "${raison}" ?`)) return;
+
     try {
         const res = await fetch(`${API}/game_players/ban`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ username, raison })
+            body: JSON.stringify({ username, raison, duree_heures: duree })
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || "Erreur API");
-        toast(`🔨 ${username} banni du jeu !`);
+        toast(`🔨 ${username} banni (${dureeLabel}) !`);
         loadGamePlayers();
     } catch (err) {
         toast(err.message || 'Erreur lors du ban.', 'error');

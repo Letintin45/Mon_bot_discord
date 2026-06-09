@@ -1028,11 +1028,15 @@ async def on_raw_reaction_remove(payload):
 async def sync_roles(interaction: discord.Interaction):
     await interaction.response.defer() 
 
+    # 🔐 On reproduit EXACTEMENT le même hachage sécurisé
     secret_salt = "Tycoon_SecretKey_2026!Admintycoongame202645BonChanceqsdqsdqsd,;s:sdfsdfscfgretg"
-    hashed_uid = hashlib.sha256((secret_salt + str(interaction.user.id)).encode('utf-8')).hexdigest()
+    texte_a_hacher = secret_salt + str(interaction.user.id)
+    hashed_uid = hashlib.sha256(texte_a_hacher.encode('utf-8')).hexdigest()
+    print("🤖 CODE BOT GENERÉ :", hashed_uid) # 👈 AJOUTE CETTE LIGNE
     
     try:
-        player_response = supabase_game.table('players').select('username, game_state').eq('discord_id', hashed_uid).execute()
+        discord_id_str = str(interaction.user.id)
+        player_response = supabase_game.table('players').select('username, game_state').eq('discord_id', discord_id_str).execute()
         
         if not player_response.data:
             await interaction.followup.send("❌ Aucun compte trouvé ! Va sur le jeu et clique sur **🔗 Rôles Discord** d'abord.")
@@ -2155,51 +2159,51 @@ async def aide_cmd(interaction: discord.Interaction, categorie: str = None): # �
     duree="Durée en heures (0 = ban permanent)"
 )
 async def ban_jeu_cmd(interaction: discord.Interaction, membre: discord.Member, raison: str = "Non-respect des règles", duree: int = 0):
-    await interaction.response.defer()
+    await interaction.response.defer(ephemeral=True)
 
-    secret_salt = "Tycoon_SecretKey_2026!Admintycoongame202645BonChanceqsdqsdqsd,;s:sdfsdfscfgretg"
-    hashed_uid = hashlib.sha256((secret_salt + str(membre.id)).encode('utf-8')).hexdigest()
+    try:
+        secret_salt = "Tycoon_SecretKey_2026!Admintycoongame202645BonChanceqsdqsdqsd,;s:sdfsdfscfgretg"
+        hashed_uid = hashlib.sha256((secret_salt + str(membre.id)).encode('utf-8')).hexdigest()
 
-    # Calculer la date d'expiration si ban temporaire
-    ban_until_iso = None
-    duree_txt = "permanent"
-    if duree > 0:
-        from datetime import timezone as tz
-        ban_until_dt = datetime.now(tz.utc) + timedelta(hours=duree)
-        ban_until_iso = ban_until_dt.isoformat()
-        h = duree
-        duree_txt = f"{h}h"
-
-    update_data = {
-        'is_excluded': True,
-        'ban_reason':  raison,
-        'ban_until':   ban_until_iso  # None = permanent
-    }
-
-    res = supabase_game.table('players').update(update_data).eq('discord_id', hashed_uid).execute()
-
-    if res.data:
-        # Message dans Discord
+        ban_until_iso = None
+        duree_txt = "permanent"
         if duree > 0:
-            ban_info = f"⏱️ Durée : **{duree_txt}**\n📋 Raison : **{raison}**"
-            dm_msg   = f"🚨 **ALERTE SYSTÈME — Admin Tycoon**\n\nTon compte a été **banni temporairement** ({duree_txt}).\n📋 **Raison :** {raison}\n⏳ **Levée automatique** dans {duree_txt}."
+            ban_until_dt = datetime.now(timezone.utc) + timedelta(hours=duree)
+            ban_until_iso = ban_until_dt.isoformat()
+            duree_txt = f"{duree}h"
+
+        update_data = {
+            'is_excluded': True,
+            'is_banned':   True,
+            'ban_reason':  raison,
+            'ban_until':   ban_until_iso
+        }
+
+        res = supabase_game.table('players').update(update_data).eq('discord_id', hashed_uid).execute()
+
+        if res.data:
+            if duree > 0:
+                ban_info = f"⏱️ Durée : **{duree_txt}**\n📋 Raison : **{raison}**"
+                dm_msg   = f"🚨 **ALERTE SYSTÈME — Admin Tycoon**\n\nTon compte a été **banni temporairement** ({duree_txt}).\n📋 **Raison :** {raison}\n⏳ **Levée automatique** dans {duree_txt}."
+            else:
+                ban_info = f"⛔ Durée : **Permanente**\n📋 Raison : **{raison}**"
+                dm_msg   = f"🚨 **ALERTE SYSTÈME — Admin Tycoon**\n\nTon compte a été **banni définitivement**.\n📋 **Raison :** {raison}\n\nContacte un administrateur pour contester."
+
+            embed = discord.Embed(title="🔨 Ban Jeu", color=discord.Color.red(), timestamp=discord.utils.utcnow())
+            embed.add_field(name="Joueur", value=membre.mention)
+            embed.add_field(name="Modérateur", value=interaction.user.mention)
+            embed.add_field(name="Détails", value=ban_info, inline=False)
+            await interaction.followup.send(embed=embed)
+            try:
+                await membre.send(dm_msg)
+            except:
+                pass
         else:
-            ban_info = f"⛔ Durée : **Permanente**\n📋 Raison : **{raison}**"
-            dm_msg   = f"🚨 **ALERTE SYSTÈME — Admin Tycoon**\n\nTon compte a été **banni définitivement**.\n📋 **Raison :** {raison}\n\nContacte un administrateur pour contester."
+            await interaction.followup.send("❌ Impossible de trouver ce joueur (compte non lié à Discord).", ephemeral=True)
 
-        embed = discord.Embed(title="🔨 Ban Jeu", color=discord.Color.red(), timestamp=discord.utils.utcnow())
-        embed.add_field(name="Joueur", value=membre.mention)
-        embed.add_field(name="Modérateur", value=interaction.user.mention)
-        embed.add_field(name="Détails", value=ban_info, inline=False)
-        await interaction.followup.send(embed=embed)
-
-        # DM au joueur
-        try:
-            await membre.send(dm_msg)
-        except:
-            pass
-    else:
-        await interaction.followup.send("❌ Impossible de trouver ce joueur (compte non lié à Discord).", ephemeral=True)
+    except Exception as e:
+        print(f"❌ Erreur /ban-jeu : {e}")
+        await interaction.followup.send(f"⚠️ Erreur technique : `{e}`", ephemeral=True)
 
 @bot.tree.command(name="unban-jeu", description="Débannir un joueur du jeu web")
 @app_commands.default_permissions(administrator=True)
@@ -2711,22 +2715,27 @@ def toggle_game_exclusion():
 
 @app_flask.route('/api/game_players/ban', methods=['POST'])
 def ban_game_player():
-    """Bannit un joueur : is_excluded=True + is_banned=True dans Supabase JEU.
-    Le joueur est expulsé en temps réel dès son prochain appel /get_state."""
     if not supabase_game:
         return jsonify({"error": "Supabase JEU non configuré"}), 503
     data = request.json or {}
     username = data.get('username', '').strip()
     raison   = data.get('raison', 'Non-respect des règles')
+    duree_h  = int(data.get('duree_heures', 0) or 0)
     if not username:
         return jsonify({"error": "username requis"}), 400
     try:
+        ban_until_iso = None
+        if duree_h > 0:
+            from datetime import timezone as _tz
+            ban_until_iso = (datetime.now(_tz.utc) + timedelta(hours=duree_h)).isoformat()
         supabase_game.table('players').update({
             'is_excluded': True,
             'is_banned':   True,
-            'ban_reason':  raison
+            'ban_reason':  raison,
+            'ban_until':   ban_until_iso
         }).eq('username', username).execute()
-        return jsonify({"success": True, "message": f"{username} banni du jeu."})
+        duree_label = f"{duree_h}h" if duree_h > 0 else "permanent"
+        return jsonify({"success": True, "message": f"{username} banni ({duree_label})."})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
@@ -2751,12 +2760,16 @@ def unban_game_player():
         return jsonify({"error": str(e)}), 500
 
 
+
+
 # /!\ TRÈS IMPORTANT : Le host est 0.0.0.0 pour l'hébergement web /!\
 # Tout à la fin de bot.py
 def run_flask():
     port = int(os.environ.get("PORT", 5000))
     print(f"🌐 Flask démarré sur le port {port}")
     app_flask.run(host='0.0.0.0', port=port, debug=False, threaded=True, use_reloader=False)
+
+
 
 
 if __name__ == '__main__':
