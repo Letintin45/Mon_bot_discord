@@ -1032,6 +1032,7 @@ async def sync_roles(interaction: discord.Interaction):
     secret_salt = "Tycoon_SecretKey_2026!Admintycoongame202645BonChanceqsdqsdqsd,;s:sdfsdfscfgretg"
     texte_a_hacher = secret_salt + str(interaction.user.id)
     hashed_uid = hashlib.sha256(texte_a_hacher.encode('utf-8')).hexdigest()
+    print("🤖 CODE BOT GENERÉ :", hashed_uid) # 👈 AJOUTE CETTE LIGNE
     
     try:
         discord_id_str = str(interaction.user.id)
