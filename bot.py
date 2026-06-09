@@ -1028,15 +1028,14 @@ async def on_raw_reaction_remove(payload):
 async def sync_roles(interaction: discord.Interaction):
     await interaction.response.defer() 
 
-    # 🔐 On reproduit EXACTEMENT le même hachage sécurisé
+    # 🔐 Hachage sécurisé de l'ID Discord
     secret_salt = "Tycoon_SecretKey_2026!Admintycoongame202645BonChanceqsdqsdqsd,;s:sdfsdfscfgretg"
     texte_a_hacher = secret_salt + str(interaction.user.id)
     hashed_uid = hashlib.sha256(texte_a_hacher.encode('utf-8')).hexdigest()
-    print("🤖 CODE BOT GENERÉ :", hashed_uid) # 👈 AJOUTE CETTE LIGNE
     
     try:
-        discord_id_str = str(interaction.user.id)
-        player_response = supabase_game.table('players').select('username, game_state').eq('discord_id', discord_id_str).execute()
+        # ✅ CORRECTION : On utilise bien 'hashed_uid' dans la recherche Supabase !
+        player_response = supabase_game.table('players').select('username, game_state').eq('discord_id', hashed_uid).execute()
         
         if not player_response.data:
             await interaction.followup.send("❌ Aucun compte trouvé ! Va sur le jeu et clique sur **🔗 Rôles Discord** d'abord.")
