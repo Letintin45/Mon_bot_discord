@@ -1775,7 +1775,6 @@ async def buy(interaction: discord.Interaction, article: app_commands.Choice[int
 
     # 3D. 🟢 NOUVEAUTÉ : Le Boost de Jeu Web
     elif choix['type'] == "boost":
-        # Hachage sécurisé de l'acheteur
         secret_salt = "Tycoon_SecretKey_2026!Admintycoongame202645BonChanceqsdqsdqsd,;s:sdfsdfscfgretg"
         texte_a_hacher = secret_salt + str(interaction.user.id)
         hashed_uid = hashlib.sha256(texte_a_hacher.encode('utf-8')).hexdigest()
