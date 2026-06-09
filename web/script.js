@@ -870,62 +870,60 @@ document.addEventListener('DOMContentLoaded', async () => {
 async function loadGamePlayers() {
     const tbody = document.getElementById('gamePlayersListBody');
     if (!tbody) return;
-    
-    tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;padding:15px;">Chargement...</td></tr>';
-
+    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:15px;">Chargement...</td></tr>';
     try {
         const res = await fetch(`${API}/game_players`);
-
         if (!res.ok) {
             const err = await res.json().catch(() => ({}));
             throw new Error(err.error || `Erreur ${res.status}`);
         }
         const players = await res.json();
-
         if (!players.length) {
-            tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;padding:15px;color:#888;">Aucun joueur trouvé.</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:15px;color:#888;">Aucun joueur trouvé.</td></tr>';
             return;
         }
-
         tbody.innerHTML = '';
         players.forEach(player => {
             const isExcluded = player.is_excluded === true;
-            // game_state peut être un objet ou une string JSON
+            const isBanned   = player.is_banned   === true;
             let state = player.game_state || {};
             if (typeof state === 'string') { try { state = JSON.parse(state); } catch { state = {}; } }
             const money = (state.money || 0).toLocaleString('fr-FR');
             const level = state.level || 1;
-
-            const badge = isExcluded
-                ? '<span class="badge badge-red">🔴 Exclu</span>'
-                : '<span class="badge badge-green">🟢 Visible</span>';
-            const btnClass = isExcluded ? 'btn-success' : 'btn-danger';
-            const btnText = isExcluded ? 'Réintégrer' : 'Exclure';
-
+            const exclBadge    = isExcluded ? '<span class="badge badge-red">🔴 Exclu</span>' : '<span class="badge badge-green">🟢 Visible</span>';
+            const exclBtnClass = isExcluded ? 'btn-success' : 'btn-danger';
+            const exclBtnText  = isExcluded ? 'Réintégrer' : 'Exclure';
+            const banBadge     = isBanned ? '<span class="badge badge-red">🔨 Banni</span>' : '<span class="badge" style="background:rgba(88,101,242,.15);color:var(--accent)">✅ Actif</span>';
+            const banBtnClass  = isBanned ? 'btn-success' : 'btn-danger';
+            const banBtnText   = isBanned ? '🔓 Débannir' : '🔨 Bannir';
             tbody.innerHTML += `
                 <tr style="border-bottom:1px solid #333;">
                     <td style="padding:10px;font-weight:bold;color:var(--accent)">${player.username}</td>
                     <td style="padding:10px;">Niv ${level} — ${money} €</td>
-                    <td style="padding:10px;">${badge}</td>
+                    <td style="padding:10px;">${exclBadge}</td>
                     <td style="padding:10px;">
-                        <button class="btn ${btnClass}" style="padding:5px 10px;font-size:12px"
-                            onclick="toggleGameExclusion('${player.username}', ${isExcluded})">
-                            ${btnText}
+                        <button class="btn ${exclBtnClass}" style="padding:5px 10px;font-size:12px"
+                            onclick="toggleGameExclusion('${player.username}', ${isExcluded})">${exclBtnText}</button>
+                    </td>
+                    <td style="padding:10px;">
+                        ${banBadge}<br>
+                        <button class="btn ${banBtnClass}" style="padding:5px 10px;font-size:12px;margin-top:4px"
+                            onclick="${isBanned ? `unbanGamePlayer('${player.username}')` : `banGamePlayer('${player.username}')`}">
+                            ${banBtnText}
                         </button>
                     </td>
                 </tr>`;
         });
     } catch (err) {
         console.error('loadGamePlayers:', err);
-        toast(err.message || 'Erreur de connexion au bot.', 'error');
-        tbody.innerHTML = `<tr><td colspan="4" style="text-align:center;color:#ff4757;padding:15px;">❌ ${err.message}</td></tr>`;
+        toast(err.message || 'Erreur de connexion.', 'error');
+        tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;color:#ff4757;padding:15px;">❌ ${err.message}</td></tr>`;
     }
 }
 
 async function toggleGameExclusion(username, currentState) {
     const newState = !currentState;
-    if (!confirm(`Voulez-vous ${newState ? 'exclure' : 'réintégrer'} ${username} ?`)) return;
-
+    if (!confirm(`Voulez-vous ${newState ? 'exclure' : 'réintégrer'} ${username} du classement ?`)) return;
     try {
         const res = await fetch(`${API}/game_players/exclude`, {
             method: 'POST',
@@ -933,9 +931,44 @@ async function toggleGameExclusion(username, currentState) {
             body: JSON.stringify({ username, is_excluded: newState })
         });
         if (!res.ok) throw new Error("Erreur API");
-        toast(`Joueur ${newState ? 'exclu' : 'réintégré'} avec succès !`);
+        toast(`${username} ${newState ? 'exclu du classement' : 'réintégré au classement'} !`);
         loadGamePlayers();
     } catch (err) {
         toast('Erreur lors de la modification.', 'error');
+    }
+}
+
+async function banGamePlayer(username) {
+    const raison = prompt(`Raison du ban pour "${username}" :`, "Non-respect des règles");
+    if (raison === null) return;
+    try {
+        const res = await fetch(`${API}/game_players/ban`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username, raison })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Erreur API");
+        toast(`🔨 ${username} banni du jeu !`);
+        loadGamePlayers();
+    } catch (err) {
+        toast(err.message || 'Erreur lors du ban.', 'error');
+    }
+}
+
+async function unbanGamePlayer(username) {
+    if (!confirm(`Débannir "${username}" du jeu ?`)) return;
+    try {
+        const res = await fetch(`${API}/game_players/unban`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Erreur API");
+        toast(`✅ ${username} débanni !`);
+        loadGamePlayers();
+    } catch (err) {
+        toast(err.message || 'Erreur lors du déban.', 'error');
     }
 }

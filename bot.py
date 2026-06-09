@@ -163,21 +163,16 @@ async def update_member_special_roles(member: discord.Member, is_vip: bool, max_
 async def auto_sync_roles():
     print("🔄 [SCAN] Début de la vérification des niveaux, VIP et richesses...")
     
-    GUILD_ID = 1511382754615361626
+    GUILD_ID = 1511382754615361626  # ID de ton serveur Discord
     guild = bot.get_guild(GUILD_ID)
     if not guild: return
     
-    secret_salt = "Tycoon_SecretKey_2026!Admintycoongame202645BonChanceqsdqsdqsd,;s:sdfsdfscfgretg"
-    
     try:
-        # On récupère tous les joueurs ayant un discord_id (hashé) lié
         players_resp = supabase_game.table('players').select('username, discord_id, game_state').not_.is_('discord_id', 'null').execute()
         if not players_resp.data: return
         
-        # Construire un dict hash → stats depuis la BDD
-        # hash_to_stats = { hashed_uid: {"level": X, "money": Y, "vip": bool} }
-        hash_to_stats = {}
-        hash_to_username = {}
+        player_stats = {} # Stockera { "discord_id": {"level": X, "money": Y, "vip": bool} }
+        username_to_discord = {}
         
         def extract_stats(state):
             if isinstance(state, str):
@@ -190,35 +185,36 @@ async def auto_sync_roles():
                 return lvl, money, is_vip
             return 1, 0.0, False
 
+        # Lecture des parties en cours
         for row in players_resp.data:
-            hashed_id = str(row['discord_id'])  # déjà hashé en BDD
+            d_id = str(row['discord_id'])
             username = row.get('username')
             lvl, money, is_vip = extract_stats(row.get('game_state', {}))
-            hash_to_stats[hashed_id] = {"level": lvl, "money": money, "vip": is_vip}
+            
+            player_stats[d_id] = {"level": lvl, "money": money, "vip": is_vip}
             if username:
-                hash_to_username[hashed_id] = username
+                username_to_discord[username] = d_id
                 
-        # Lecture des sauvegardes pour enrichir les stats
-        usernames = list(hash_to_username.values())
+        # Lecture de toutes les sauvegardes
+        usernames = list(username_to_discord.keys())
         if usernames:
             saves_resp = supabase_game.table('saves').select('username, game_state').in_('username', usernames).execute()
-            # username → hash inverse pour retrouver la clé
-            username_to_hash = {v: k for k, v in hash_to_username.items()}
             for row in saves_resp.data:
                 username = row.get('username')
-                hashed_id = username_to_hash.get(username)
-                if hashed_id:
+                d_id = username_to_discord.get(username)
+                if d_id:
                     lvl, money, is_vip = extract_stats(row.get('game_state', {}))
-                    hash_to_stats[hashed_id]["level"] = max(hash_to_stats[hashed_id]["level"], lvl)
-                    hash_to_stats[hashed_id]["money"] = max(hash_to_stats[hashed_id]["money"], money)
-                    hash_to_stats[hashed_id]["vip"] = hash_to_stats[hashed_id]["vip"] or is_vip
+                    # On garde les meilleures stats
+                    player_stats[d_id]["level"] = max(player_stats[d_id]["level"], lvl)
+                    player_stats[d_id]["money"] = max(player_stats[d_id]["money"], money)
+                    player_stats[d_id]["vip"] = player_stats[d_id]["vip"] or is_vip
                         
-        # Distribution — on hashle l'ID Discord du membre pour matcher la BDD
+        # Distribution
         for member in guild.members:
             if member.bot: continue
-            member_hash = hashlib.sha256((secret_salt + str(member.id)).encode('utf-8')).hexdigest()
-            if member_hash in hash_to_stats:
-                stats = hash_to_stats[member_hash]
+            d_id = str(member.id)
+            if d_id in player_stats:
+                stats = player_stats[d_id]
                 await update_member_level_role(member, stats["level"])
                 await update_member_special_roles(member, stats["vip"], stats["money"])
                 
@@ -1032,14 +1028,15 @@ async def on_raw_reaction_remove(payload):
 async def sync_roles(interaction: discord.Interaction):
     await interaction.response.defer() 
 
-    # 🔐 Même hachage que le jeu (app.py) pour retrouver le bon enregistrement
+    # 🔐 On reproduit EXACTEMENT le même hachage sécurisé
     secret_salt = "Tycoon_SecretKey_2026!Admintycoongame202645BonChanceqsdqsdqsd,;s:sdfsdfscfgretg"
     texte_a_hacher = secret_salt + str(interaction.user.id)
     hashed_uid = hashlib.sha256(texte_a_hacher.encode('utf-8')).hexdigest()
+    print("🤖 CODE BOT GENERÉ :", hashed_uid) # 👈 AJOUTE CETTE LIGNE
     
     try:
-        # On cherche avec le hash — c'est ce que le jeu a stocké dans discord_id
-        player_response = supabase_game.table('players').select('username, game_state').eq('discord_id', hashed_uid).execute()
+        discord_id_str = str(interaction.user.id)
+        player_response = supabase_game.table('players').select('username, game_state').eq('discord_id', discord_id_str).execute()
         
         if not player_response.data:
             await interaction.followup.send("❌ Aucun compte trouvé ! Va sur le jeu et clique sur **🔗 Rôles Discord** d'abord.")
@@ -1049,6 +1046,7 @@ async def sync_roles(interaction: discord.Interaction):
         username = player_data.get('username')
         active_state = player_data.get('game_state', {})
         
+        # Petite fonction interne pour tout lire d'un coup (Niveau, Argent, VIP)
         def extract_stats(state):
             if isinstance(state, str):
                 try: state = json.loads(state)
@@ -1056,30 +1054,37 @@ async def sync_roles(interaction: discord.Interaction):
             if isinstance(state, dict):
                 lvl = int(state.get('level', 1))
                 money = float(state.get('money', 0.0))
+                # Vérifie la présence d'une clé 'vip' ou 'is_vip' à true
                 is_vip = state.get('vip', False) or state.get('is_vip', False)
                 return lvl, money, is_vip
             return 1, 0.0, False
 
+        # Variables pour stocker le maximum de toutes les sauvegardes
         max_level = 1
         max_money = 0.0
         has_vip = False
 
+        # 1. On lit la partie en cours (table players)
         lvl, money, is_vip = extract_stats(active_state)
         max_level = max(max_level, lvl)
         max_money = max(max_money, money)
         has_vip = has_vip or is_vip
         
+        # 2. On fouille les autres sauvegardes (table saves)
         if username:
             saves_response = supabase_game.table('saves').select('game_state').eq('username', username).execute()
             for row in saves_response.data:
-                lvl, money, is_vip = extract_stats(row.get('game_state', {}))
+                save_state = row.get('game_state', {})
+                lvl, money, is_vip = extract_stats(save_state)
                 max_level = max(max_level, lvl)
                 max_money = max(max_money, money)
                 has_vip = has_vip or is_vip
                     
+        # 3. On distribue les rôles de Niveau ET les rôles Spéciaux !
         await update_member_level_role(interaction.user, max_level)
         await update_member_special_roles(interaction.user, has_vip, max_money)
         
+        # 4. Message de succès personnalisé
         msg = f"✅ Rôles synchronisés ! Niveau max : **Niveau {max_level}**."
         if has_vip:
             msg += "\n💎 **Statut VIP détecté !** Rôle attribué."
@@ -2656,6 +2661,52 @@ def toggle_game_exclusion():
     try:
         supabase_game.table('players').update({'is_excluded': new_state}).eq('username', username).execute()
         return jsonify({"success": True})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+# ──────────────────────────────────────────────────────────────
+# ROUTES BAN/UNBAN JEU — appelées depuis le dashboard (index.html)
+# ──────────────────────────────────────────────────────────────
+
+@app_flask.route('/api/game_players/ban', methods=['POST'])
+def ban_game_player():
+    """Bannit un joueur : is_excluded=True + is_banned=True dans Supabase JEU.
+    Le joueur est expulsé en temps réel dès son prochain appel /get_state."""
+    if not supabase_game:
+        return jsonify({"error": "Supabase JEU non configuré"}), 503
+    data = request.json or {}
+    username = data.get('username', '').strip()
+    raison   = data.get('raison', 'Non-respect des règles')
+    if not username:
+        return jsonify({"error": "username requis"}), 400
+    try:
+        supabase_game.table('players').update({
+            'is_excluded': True,
+            'is_banned':   True,
+            'ban_reason':  raison
+        }).eq('username', username).execute()
+        return jsonify({"success": True, "message": f"{username} banni du jeu."})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app_flask.route('/api/game_players/unban', methods=['POST'])
+def unban_game_player():
+    """Lève le ban : is_excluded=False + is_banned=False."""
+    if not supabase_game:
+        return jsonify({"error": "Supabase JEU non configuré"}), 503
+    data = request.json or {}
+    username = data.get('username', '').strip()
+    if not username:
+        return jsonify({"error": "username requis"}), 400
+    try:
+        supabase_game.table('players').update({
+            'is_excluded': False,
+            'is_banned':   False,
+            'ban_reason':  None
+        }).eq('username', username).execute()
+        return jsonify({"success": True, "message": f"{username} débanni."})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
