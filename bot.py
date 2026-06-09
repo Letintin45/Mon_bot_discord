@@ -1028,15 +1028,11 @@ async def on_raw_reaction_remove(payload):
 async def sync_roles(interaction: discord.Interaction):
     await interaction.response.defer() 
 
-    # 🔐 On reproduit EXACTEMENT le même hachage sécurisé
     secret_salt = "Tycoon_SecretKey_2026!Admintycoongame202645BonChanceqsdqsdqsd,;s:sdfsdfscfgretg"
-    texte_a_hacher = secret_salt + str(interaction.user.id)
-    hashed_uid = hashlib.sha256(texte_a_hacher.encode('utf-8')).hexdigest()
-    print("🤖 CODE BOT GENERÉ :", hashed_uid) # 👈 AJOUTE CETTE LIGNE
+    hashed_uid = hashlib.sha256((secret_salt + str(interaction.user.id)).encode('utf-8')).hexdigest()
     
     try:
-        discord_id_str = str(interaction.user.id)
-        player_response = supabase_game.table('players').select('username, game_state').eq('discord_id', discord_id_str).execute()
+        player_response = supabase_game.table('players').select('username, game_state').eq('discord_id', hashed_uid).execute()
         
         if not player_response.data:
             await interaction.followup.send("❌ Aucun compte trouvé ! Va sur le jeu et clique sur **🔗 Rôles Discord** d'abord.")
@@ -2755,16 +2751,12 @@ def unban_game_player():
         return jsonify({"error": str(e)}), 500
 
 
-
-
 # /!\ TRÈS IMPORTANT : Le host est 0.0.0.0 pour l'hébergement web /!\
 # Tout à la fin de bot.py
 def run_flask():
     port = int(os.environ.get("PORT", 5000))
     print(f"🌐 Flask démarré sur le port {port}")
     app_flask.run(host='0.0.0.0', port=port, debug=False, threaded=True, use_reloader=False)
-
-
 
 
 if __name__ == '__main__':
