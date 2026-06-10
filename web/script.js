@@ -927,18 +927,33 @@ async function loadGamePlayers() {
 
             const tr = document.createElement('tr');
             tr.style.borderBottom = '1px solid #333';
+            
+            // 🟢 NOUVELLES DONNÉES (Plateforme & Réponse)
+            const platformHtml = state.platform ? `<br><span style="font-size:0.8em; color:#aaa;">${state.platform}</span>` : '';
+            const replyHtml = state.player_reply ? `<br><div style="margin-top:5px; padding:6px; background:#111; border-left:3px solid #06D6A0; font-size:0.85em; color:#ddd; border-radius:3px;">💬 <b>Rép:</b> ${state.player_reply.replace(/</g, "&lt;")}</div>` : '';
+
             tr.innerHTML = `
-                <td style="padding:10px;font-weight:bold;color:var(--accent)">${player.username}</td>
+                <td style="padding:10px;font-weight:bold;color:var(--accent)">
+                    ${player.username}
+                    ${platformHtml}
+                </td>
                 <td style="padding:10px;">Niv ${level} — ${money} €</td>
-                <td style="padding:10px;">${exclBadge}</td>
+                <td style="padding:10px;">
+                    ${exclBadge}
+                    ${replyHtml}
+                </td>
                 <td style="padding:10px;">
                     <button class="btn ${exclBtnClass} btn-excl" data-username="${safeUser}" data-excluded="${isExcluded}"
                         style="padding:5px 10px;font-size:12px">${exclBtnText}</button>
                 </td>
                 <td style="padding:10px;">
                     ${banBadge}<br>
-                    <button class="btn ${banBtnClass} btn-ban" data-username="${safeUser}" data-banned="${isBanned}"
-                        style="padding:5px 10px;font-size:12px;margin-top:4px">${banBtnText}</button>
+                    <div style="display:flex; gap:5px; margin-top:4px;">
+                        <button class="btn ${banBtnClass} btn-ban" data-username="${safeUser}" data-banned="${isBanned}"
+                            style="padding:5px 10px;font-size:12px">${banBtnText}</button>
+                        <button class="btn btn-primary btn-msg" data-username="${safeUser}" 
+                            style="padding:5px 10px;font-size:12px;background:#ff5722;border:none;cursor:pointer;">💬 Msg</button>
+                    </div>
                 </td>`;
             tbody.appendChild(tr);
         });
@@ -947,11 +962,9 @@ async function loadGamePlayers() {
         tbody.querySelectorAll('.btn-excl').forEach(btn => {
             btn.addEventListener('click', () => toggleGameExclusion(btn.dataset.username, btn.dataset.excluded === 'true'));
         });
-        tbody.querySelectorAll('.btn-ban').forEach(btn => {
-            btn.addEventListener('click', () => {
-                if (btn.dataset.banned === 'true') unbanGamePlayer(btn.dataset.username);
-                else banGamePlayer(btn.dataset.username);
-            });
+        // 🟢 ÉCOUTEUR POUR LE BOUTON MESSAGE
+        tbody.querySelectorAll('.btn-msg').forEach(btn => {
+            btn.addEventListener('click', () => sendAdminMessage(btn.dataset.username));
         });
     } catch (err) {
         console.error('loadGamePlayers:', err);
@@ -1017,5 +1030,27 @@ async function unbanGamePlayer(username) {
         loadGamePlayers();
     } catch (err) {
         toast(err.message || 'Erreur lors du déban.', 'error');
+    }
+}
+
+
+// 🟢 FONCTION POUR ENVOYER LE MESSAGE
+async function sendAdminMessage(username) {
+    const msg = prompt(`Envoyer un message prioritaire à ${username} (Il s'affichera sur son écran de jeu) :`);
+    if (!msg) return;
+
+    try {
+        const res = await fetch(`${API}/game_players/message`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username: username, message: msg })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Erreur API");
+        
+        toast(`📩 Message envoyé à ${username} !`);
+        loadGamePlayers(); // Rafraîchit le tableau
+    } catch (err) {
+        toast(err.message, 'error');
     }
 }

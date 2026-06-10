@@ -2734,6 +2734,29 @@ def unban_game_player():
         return jsonify({"error": str(e)}), 500
 
 
+@app_flask.route('/api/game_players/message', methods=['POST'])
+def send_game_message():
+    if not supabase_game:
+        return jsonify({"error": "Supabase JEU non configuré"}), 503
+    data = request.json or {}
+    username = data.get('username', '').strip()
+    message = data.get('message', '').strip()
+    if not username or not message:
+        return jsonify({"error": "Données incomplètes"}), 400
+    try:
+        res = supabase_game.table('players').select('game_state').eq('username', username).execute()
+        if not res.data: return jsonify({"error": "Joueur introuvable"}), 404
+            
+        game_state = res.data[0].get('game_state', {})
+        game_state['admin_message'] = message
+        game_state['player_reply'] = ""
+        
+        supabase_game.table('players').update({'game_state': game_state}).eq('username', username).execute()
+        return jsonify({"success": True, "message": f"Message envoyé à {username} !"})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
 
 
 # /!\ TRÈS IMPORTANT : Le host est 0.0.0.0 pour l'hébergement web /!\
