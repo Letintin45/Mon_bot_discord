@@ -31,11 +31,11 @@ window.fetch = async function() {
 // --- FONCTIONS UTILITAIRES (Elles avaient disparu !) ---
 function toast(msg, type = 'success') {
     const t = document.getElementById('toast');
-    if(!t) return;
-    t.textContent = msg;
-    t.style.background = type === 'error' ? '#ff3366' : '#00cc66';
-    t.className = 'show';
-    setTimeout(() => t.className = t.className.replace('show', ''), 3000);
+    if (!t) return;
+    t.textContent = (type === 'error' ? '✕  ' : '✓  ') + msg;
+    t.className = 'show ' + type;
+    clearTimeout(t._timer);
+    t._timer = setTimeout(() => { t.className = t.className.replace('show', '').trim(); }, 3500);
 }
 
 function showPage(pageId, elem = null) {
@@ -193,20 +193,28 @@ async function refreshAll() { await loadGuild(); toast('Données rafraîchies !'
 async function loadStats() {
   try {
     const res = await fetch(`${API}/stats/${currentGuild}`);
-    const data = await res.json();
-    document.getElementById('statsGrid').innerHTML = `
-      <div class="stat-card"><span class="stat-icon">💬</span><div class="stat-value">${data.messages_total || 0}</div><div class="stat-label">Messages totaux</div></div>
-      <div class="stat-card"><span class="stat-icon">📥</span><div class="stat-value">${data.members_joined || 0}</div><div class="stat-label">Membres rejoints</div></div>
-      <div class="stat-card"><span class="stat-icon">🎫</span><div class="stat-value">${data.tickets_total || 0}</div><div class="stat-label">Tickets créés</div></div>
-      <div class="stat-card"><span class="stat-icon">🔓</span><div class="stat-value">${data.open_tickets || 0}</div><div class="stat-label">Tickets ouverts</div></div>
-      <div class="stat-card"><span class="stat-icon">💰</span><div class="stat-value">${data.total_coins_circulating || 0}</div><div class="stat-label">Coins en circulation</div></div>
-      <div class="stat-card"><span class="stat-icon">⚠️</span><div class="stat-value">${data.total_warns || 0}</div><div class="stat-label">Warns actifs</div></div>
-      <div class="stat-card"><span class="stat-icon">👥</span><div class="stat-value">${data.active_members_economy || 0}</div><div class="stat-label">Membres actifs éco</div></div>
-      <div class="stat-card"><span class="stat-icon">📨</span><div class="stat-value">${data.top_inviter_count || 0}</div><div class="stat-label">Record invitations</div></div>
-      <div class="stat-card" style="border:1px solid #00e5ff; background: rgba(0,229,255,0.05);"><span class="stat-icon">🎮</span><div class="stat-value">${data.total_game_players || 0}</div><div class="stat-label" style="color:#00e5ff;">Comptes Jeu Créés</div></div>
-      <div class="stat-card" style="border:1px solid #00e5ff; background: rgba(0,229,255,0.05);"><span class="stat-icon">💶</span><div class="stat-value">${Number(data.total_game_money || 0).toLocaleString()} €</div><div class="stat-label" style="color:#00e5ff;">Argent Global (Jeu)</div></div>    
-    `;
-  } catch(e) {}
+    const d = await res.json();
+    const fmt = n => Number(n || 0).toLocaleString('fr-FR');
+    document.getElementById('statsGrid').innerHTML = [
+      { icon:'💬', val: fmt(d.messages_total),            label:'Messages totaux' },
+      { icon:'📥', val: fmt(d.members_joined),            label:'Membres rejoints' },
+      { icon:'🎫', val: fmt(d.tickets_total),             label:'Tickets créés' },
+      { icon:'🔓', val: fmt(d.open_tickets),              label:'Tickets ouverts' },
+      { icon:'💰', val: fmt(d.total_coins_circulating),   label:'Coins en circulation' },
+      { icon:'⚠️', val: fmt(d.total_warns),               label:'Warns actifs' },
+      { icon:'👥', val: fmt(d.active_members_economy),    label:'Membres actifs éco' },
+      { icon:'📨', val: fmt(d.top_inviter_count),         label:'Record invitations' },
+      { icon:'🎮', val: fmt(d.total_game_players),        label:'Comptes Jeu créés', accent: '#00e5ff' },
+      { icon:'💶', val: fmt(d.total_game_money) + ' €',   label:'Argent Global (Jeu)', accent: '#00e5ff' },
+    ].map(s => `
+      <div class="stat-card" ${s.accent ? `style="border-color:${s.accent}20;background:${s.accent}08"` : ''}>
+        <span class="stat-icon">${s.icon}</span>
+        <div class="stat-value" ${s.accent ? `style="color:${s.accent}"` : ''}>${s.val}</div>
+        <div class="stat-label" ${s.accent ? `style="color:${s.accent}"` : ''}>${s.label}</div>
+      </div>`).join('');
+  } catch(e) {
+    document.getElementById('statsGrid').innerHTML = `<p style="color:var(--red);padding:20px">❌ Erreur de chargement</p>`;
+  }
 }
 
 async function loadCurrentConfig() {
@@ -963,17 +971,20 @@ async function loadGamePlayers() {
             tbody.appendChild(tr);
         });
 
-        // Attacher les events après injection pour éviter les conflits de guillemets
         tbody.querySelectorAll('.btn-excl').forEach(btn => {
             btn.addEventListener('click', () => toggleGameExclusion(btn.dataset.username, btn.dataset.excluded === 'true'));
         });
-        // 🟢 ÉCOUTEUR POUR LE BOUTON MESSAGE
+        tbody.querySelectorAll('.btn-ban').forEach(btn => {
+            btn.addEventListener('click', () => {
+                if (btn.dataset.banned === 'true') unbanGamePlayer(btn.dataset.username);
+                else banGamePlayer(btn.dataset.username);
+            });
+        });
         tbody.querySelectorAll('.btn-msg').forEach(btn => {
             btn.addEventListener('click', () => sendAdminMessage(btn.dataset.username));
         });
-        // 🟢 ÉCOUTEUR POUR LE BOUTON POUR NETTOYER LA DISCUSSION
         tbody.querySelectorAll('.btn-clear-msg').forEach(btn => {
-            btn.addEventListener('click', () => clearGameMessage(btn.dataset.username));
+            btn.addEventListener('click', () => clearPlayerMessage(btn.dataset.username));
         });
     } catch (err) {
         console.error('loadGamePlayers:', err);

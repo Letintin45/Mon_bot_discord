@@ -3,21 +3,94 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#0b0d11">
 <title>Admin Tycoon — Dashboard</title>
 <link rel="stylesheet" href="style.css">
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+  /* ── Améliorations globales ── */
+  :root { --transition: 0.18s ease; }
+
+  /* Login overlay amélioré */
+  #loginOverlay { background: radial-gradient(ellipse at 50% 0%, rgba(88,101,242,0.12) 0%, var(--bg) 70%); }
+  .login-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 48px 40px;
+    max-width: 420px;
+    width: 90%;
+    text-align: center;
+    box-shadow: 0 24px 64px rgba(0,0,0,0.5), 0 0 0 1px rgba(88,101,242,0.1);
+  }
+  .login-card h2 { font-size: 26px; font-weight: 800; margin-bottom: 8px; }
+  .login-card p { color: var(--text-muted); font-size: 13px; margin-bottom: 28px; line-height: 1.6; }
+  .btn-discord {
+    display: inline-flex; align-items: center; gap: 12px;
+    background: #5865F2; color: #fff;
+    padding: 14px 28px; border-radius: 10px;
+    font-weight: 700; font-size: 15px; text-decoration: none;
+    transition: transform var(--transition), box-shadow var(--transition), background var(--transition);
+    box-shadow: 0 4px 20px rgba(88,101,242,0.4);
+  }
+  .btn-discord:hover { background: #4752c4; transform: translateY(-2px); box-shadow: 0 8px 28px rgba(88,101,242,0.5); }
+  .btn-discord:active { transform: translateY(0); }
+
+  /* Status dot pulsing */
+  .status-dot { animation: none; transition: background var(--transition); }
+  .status-dot:not(.offline) { animation: pulse-green 2.5s infinite; }
+  @keyframes pulse-green {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(87,242,135,0.5); }
+    50% { box-shadow: 0 0 0 5px rgba(87,242,135,0); }
+  }
+
+  /* Nav items */
+  .nav-item { border-radius: 8px; transition: background var(--transition), color var(--transition); }
+  .nav-item .icon { width: 20px; display: inline-block; text-align: center; }
+
+  /* Stats grid responsive */
+  .stats-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 16px; }
+
+  /* Skeleton loader */
+  .skeleton { background: linear-gradient(90deg, var(--surface2) 25%, var(--surface3) 50%, var(--surface2) 75%); background-size: 200% 100%; animation: shimmer 1.4s infinite; border-radius: 8px; }
+  @keyframes shimmer { 0%{background-position:200% 0} 100%{background-position:-200% 0} }
+
+  /* Toast amélioré */
+  #toast { font-family: 'Syne', sans-serif; display:flex; align-items:center; gap:10px; min-width:240px; padding: 14px 20px; border-radius: 10px; box-shadow: 0 8px 32px rgba(0,0,0,0.4); }
+  #toast.success { border-left: 3px solid var(--green); }
+  #toast.error   { border-left: 3px solid var(--red); }
+
+  /* Tableau jeu — colonnes fixes */
+  #gamePlayersListBody td { vertical-align: middle; }
+  .badge { white-space: nowrap; }
+
+  /* Cards — hover subtil */
+  .card { transition: box-shadow var(--transition); }
+  .card:hover { box-shadow: 0 0 0 1px rgba(88,101,242,0.15); }
+
+  /* Boutons — feedback tactile */
+  .btn { transition: opacity var(--transition), transform var(--transition); }
+  .btn:active { transform: scale(0.97); }
+
+  /* Scrollbar discrète */
+  ::-webkit-scrollbar { width: 5px; height: 5px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--text-dim); }
+</style>
 </head>
 <body>
 
-<div id="loginOverlay" style="position:fixed;inset:0;background:var(--bg);z-index:99999;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:20px;">
-  <h2 style="font-size:24px;">🔒 Accès Restreint</h2>
-  <p style="color:var(--text-muted)">Connectez-vous avec votre compte Discord pour accéder au panel.</p>
-  
-  <!-- LE NOUVEAU BOUTON DISCORD -->
-  <a href="https://discord.com/api/oauth2/authorize?client_id=1511521032270381066&redirect_uri=https%3A%2F%2Fletintin45.github.io%2FMon_bot_discord%2Fweb%2F&response_type=token&scope=identify%20guilds"      style="background-color: #5865F2; color: white; padding: 12px 24px; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 16px; display: flex; align-items: center; gap: 10px; transition: 0.2s;">
-    <svg width="24" height="24" viewBox="0 0 127.14 96.36" fill="white"><path d="M107.7,8.07A105.15,105.15,0,0,0,81.47,0a72.06,72.06,0,0,0-3.36,6.83A97.68,97.68,0,0,0,49,6.83,72.37,72.37,0,0,0,45.64,0,105.89,105.89,0,0,0,19.39,8.09C2.79,32.65-1.71,56.6.54,80.21h0A105.73,105.73,0,0,0,32.71,96.36,77.7,77.7,0,0,0,39.6,85.25a68.42,68.42,0,0,1-10.85-5.18c.91-.66,1.8-1.34,2.66-2a75.57,75.57,0,0,0,64.32,0c.87.71,1.76,1.39,2.66,2a68.68,68.68,0,0,1-10.87,5.19,77,77,0,0,0,6.89,11.1A105.25,105.25,0,0,0,126.6,80.22h0C129.24,52.84,122.09,29.11,107.7,8.07ZM42.45,65.69C36.18,65.69,31,60,31,53s5-12.74,11.43-12.74S54,46,53.89,53,48.84,65.69,42.45,65.69Zm42.24,0C78.41,65.69,73.31,60,73.31,53s5-12.74,11.43-12.74S96.2,46,96.1,53,91.08,65.69,84.69,65.69Z"/></svg>
-    Se connecter avec Discord
-  </a>
+<div id="loginOverlay" style="position:fixed;inset:0;z-index:99999;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:0;">
+  <div class="login-card">
+    <div style="font-size:40px;margin-bottom:16px">⚡</div>
+    <h2>Admin Tycoon</h2>
+    <p>Connectez-vous avec votre compte Discord pour accéder au panel d'administration.</p>
+    <a href="https://discord.com/api/oauth2/authorize?client_id=1511521032270381066&redirect_uri=https%3A%2F%2Fletintin45.github.io%2FMon_bot_discord%2Fweb%2F&response_type=token&scope=identify%20guilds" class="btn-discord">
+      <svg width="22" height="22" viewBox="0 0 127.14 96.36" fill="white"><path d="M107.7,8.07A105.15,105.15,0,0,0,81.47,0a72.06,72.06,0,0,0-3.36,6.83A97.68,97.68,0,0,0,49,6.83,72.37,72.37,0,0,0,45.64,0,105.89,105.89,0,0,0,19.39,8.09C2.79,32.65-1.71,56.6.54,80.21h0A105.73,105.73,0,0,0,32.71,96.36,77.7,77.7,0,0,0,39.6,85.25a68.42,68.42,0,0,1-10.85-5.18c.91-.66,1.8-1.34,2.66-2a75.57,75.57,0,0,0,64.32,0c.87.71,1.76,1.39,2.66,2a68.68,68.68,0,0,1-10.87,5.19,77,77,0,0,0,6.89,11.1A105.25,105.25,0,0,0,126.6,80.22h0C129.24,52.84,122.09,29.11,107.7,8.07ZM42.45,65.69C36.18,65.69,31,60,31,53s5-12.74,11.43-12.74S54,46,53.89,53,48.84,65.69,42.45,65.69Zm42.24,0C78.41,65.69,73.31,60,73.31,53s5-12.74,11.43-12.74S96.2,46,96.1,53,91.08,65.69,84.69,65.69Z"/></svg>
+      Se connecter avec Discord
+    </a>
+  </div>
 </div>
 
 <aside class="sidebar">
@@ -58,13 +131,23 @@
   <div id="page-overview" class="page active">
     <div class="header">
       <div><h2>Vue d'ensemble</h2><p>Statistiques globales du serveur</p></div>
-      <div style="display:flex;gap:10px;">
+      <div style="display:flex;gap:10px;align-items:center">
         <button class="btn btn-success" onclick="checkApi()" title="Vérifie la connexion Supabase">🔍 Diagnostic</button>
         <button class="btn btn-primary" onclick="refreshAll()">↻ Rafraîchir</button>
       </div>
     </div>
     <div class="content">
-      <div class="stats-grid" id="statsGrid">Chargement...</div>
+      <div class="stats-grid" id="statsGrid">
+        <!-- Skeleton placeholders -->
+        <div class="stat-card skeleton" style="height:110px"></div>
+        <div class="stat-card skeleton" style="height:110px"></div>
+        <div class="stat-card skeleton" style="height:110px"></div>
+        <div class="stat-card skeleton" style="height:110px"></div>
+        <div class="stat-card skeleton" style="height:110px"></div>
+        <div class="stat-card skeleton" style="height:110px"></div>
+        <div class="stat-card skeleton" style="height:110px"></div>
+        <div class="stat-card skeleton" style="height:110px"></div>
+      </div>
     </div>
   </div>
 
@@ -438,32 +521,31 @@
         </div>
       </div>
     </div>
-    <!-- 🟢 NOUVEAU : GESTION DU LEADERBOARD DU JEU -->
-    <div class="content" style="margin-top: 30px;">
+    <div class="content" style="margin-top:20px;">
       <div class="card">
-          <div class="card-title"><span>🏆</span> Gestion du Leaderboard (Jeu)</div>
-          <p style="color: var(--text-muted); margin-bottom: 15px;">Liste des joueurs du jeu (via Supabase). Permet de cacher votre compte de test du classement.</p>
-          
-          <button class="btn btn-primary" onclick="loadGamePlayers()" style="margin-bottom: 15px; background-color: #00e5ff; color: black; font-weight: bold;">
-              🔄 Actualiser la liste des joueurs
+        <div class="card-title" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;">
+          <span><span>🏆</span> Gestion du Leaderboard (Jeu)</span>
+          <button class="btn btn-primary" onclick="loadGamePlayers()" style="font-size:12px;padding:7px 14px;">
+            🔄 Actualiser
           </button>
-
-          <div style="overflow-x: auto;">
-              <table style="width: 100%; text-align: left; border-collapse: collapse;">
-                  <thead>
-                      <tr style="border-bottom: 2px solid #333;">
-                          <th style="padding: 10px;">Pseudo & Plateforme</th>
-                          <th style="padding: 10px;">Niv. & Argent</th>
-                          <th style="padding: 10px;">Statut & Rép.</th>
-                          <th style="padding: 10px;">Classement</th>
-                          <th style="padding: 10px;">Actions & Ban</th>
-                      </tr>
-                  </thead>
-                  <tbody id="gamePlayersListBody">
-                      <tr><td colspan="4" style="text-align: center; padding: 15px; color: #666;">Cliquez sur Actualiser la liste...</td></tr>
-                  </tbody>
-              </table>
-          </div>
+        </div>
+        <p style="color:var(--text-muted);font-size:12px;margin-bottom:16px;">Joueurs du jeu via Supabase. Gérez le classement, les bans et envoyez des messages.</p>
+        <div style="overflow-x:auto;border-radius:8px;border:1px solid var(--border);">
+          <table style="width:100%;text-align:left;border-collapse:collapse;min-width:680px;">
+            <thead>
+              <tr style="background:var(--surface2);">
+                <th style="padding:10px 14px;font-size:11px;text-transform:uppercase;letter-spacing:.6px;color:var(--text-muted);border-bottom:1px solid var(--border);">Joueur</th>
+                <th style="padding:10px 14px;font-size:11px;text-transform:uppercase;letter-spacing:.6px;color:var(--text-muted);border-bottom:1px solid var(--border);">Progression</th>
+                <th style="padding:10px 14px;font-size:11px;text-transform:uppercase;letter-spacing:.6px;color:var(--text-muted);border-bottom:1px solid var(--border);">Statut</th>
+                <th style="padding:10px 14px;font-size:11px;text-transform:uppercase;letter-spacing:.6px;color:var(--text-muted);border-bottom:1px solid var(--border);">Classement</th>
+                <th style="padding:10px 14px;font-size:11px;text-transform:uppercase;letter-spacing:.6px;color:var(--text-muted);border-bottom:1px solid var(--border);">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="gamePlayersListBody">
+              <tr><td colspan="5" style="text-align:center;padding:24px;color:var(--text-muted);">Cliquez sur Actualiser…</td></tr>
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   </div>
