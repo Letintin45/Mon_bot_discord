@@ -930,8 +930,13 @@ async function loadGamePlayers() {
             
             // 🟢 NOUVELLES DONNÉES (Plateforme & Réponse)
             const platformHtml = state.platform ? `<br><span style="font-size:0.8em; color:#aaa;">${state.platform}</span>` : '';
-            const replyHtml = state.player_reply ? `<br><div style="margin-top:5px; padding:6px; background:#111; border-left:3px solid #06D6A0; font-size:0.85em; color:#ddd; border-radius:3px;">💬 <b>Rép:</b> ${state.player_reply.replace(/</g, "&lt;")}</div>` : '';
-
+            // 🟢 MODIFIÉ : On intègre une petite croix rouge à droite de la réponse
+            const replyHtml = state.player_reply ? `
+                <br>
+                <div style="margin-top:5px; padding:6px; background:#111; border-left:3px solid #06D6A0; font-size:0.85em; color:#ddd; border-radius:3px; display:flex; justify-content:space-between; align-items:center; gap:10px;">
+                    <span>💬 <b>Rép:</b> ${state.player_reply.replace(/</g, "&lt;")}</span>
+                    <button class="btn-clear-msg" data-username="${safeUser}" style="background:transparent; border:none; color:#ff4d4d; font-size:1.2em; font-weight:bold; cursor:pointer; padding:0 5px;" title="Supprimer la réponse">&times;</button>
+                </div>` : '';
             tr.innerHTML = `
                 <td style="padding:10px;font-weight:bold;color:var(--accent)">
                     ${player.username}
@@ -965,6 +970,10 @@ async function loadGamePlayers() {
         // 🟢 ÉCOUTEUR POUR LE BOUTON MESSAGE
         tbody.querySelectorAll('.btn-msg').forEach(btn => {
             btn.addEventListener('click', () => sendAdminMessage(btn.dataset.username));
+        });
+        // 🟢 ÉCOUTEUR POUR LE BOUTON POUR NETTOYER LA DISCUSSION
+        tbody.querySelectorAll('.btn-clear-msg').forEach(btn => {
+            btn.addEventListener('click', () => clearGameMessage(btn.dataset.username));
         });
     } catch (err) {
         console.error('loadGamePlayers:', err);
@@ -1050,6 +1059,26 @@ async function sendAdminMessage(username) {
         
         toast(`📩 Message envoyé à ${username} !`);
         loadGamePlayers(); // Rafraîchit le tableau
+    } catch (err) {
+        toast(err.message, 'error');
+    }
+}
+
+// 🟢 NOUVEAU : FONCTION POUR EFFACER LA RÉPONSE D'UN JOUEUR
+async function clearPlayerMessage(username) {
+    if (!confirm(`Supprimer la réponse de ${username} et réinitialiser la discussion ?`)) return;
+
+    try {
+        const res = await fetch(`${API}/game_players/clear_message`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username: username })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Erreur API");
+        
+        toast(`🗑️ Réponse de ${username} supprimée !`);
+        loadGamePlayers(); // Rafraîchit le tableau automatiquement
     } catch (err) {
         toast(err.message, 'error');
     }

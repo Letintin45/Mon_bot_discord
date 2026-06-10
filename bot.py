@@ -2756,6 +2756,31 @@ def send_game_message():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+@app_flask.route('/api/game_players/clear_message', methods=['POST'])
+def clear_game_message():
+    if not supabase_game:
+        return jsonify({"error": "Supabase JEU non configuré"}), 503
+    data = request.json or {}
+    username = data.get('username', '').strip()
+    if not username:
+        return jsonify({"error": "username requis"}), 400
+    try:
+        # Récupération du game_state actuel
+        res = supabase_game.table('players').select('game_state').eq('username', username).execute()
+        if not res.data: return jsonify({"error": "Joueur introuvable"}), 404
+            
+        game_state = res.data[0].get('game_state', {})
+        
+        # On remet à zéro l'historique de discussion pour ce joueur
+        game_state['admin_message'] = ""
+        game_state['player_reply'] = ""
+        
+        # Sauvegarde
+        supabase_game.table('players').update({'game_state': game_state}).eq('username', username).execute()
+        return jsonify({"success": True, "message": f"Discussion nettoyée pour {username} !"})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 
 
 
