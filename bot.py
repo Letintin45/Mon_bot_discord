@@ -2806,6 +2806,16 @@ def dashboard_set_afk():
     except Exception as e:
         return jsonify({"error": f"Serveur du jeu injoignable: {e}"}), 500
 
+@app_flask.route('/api/game/online_players', methods=['GET'])
+def dashboard_online_players():
+    try:
+        url_jeu = "https://admin-tycoon.onrender.com/api/admin/online_players"
+        rep = requests.get(url_jeu, timeout=5)
+        if rep.status_code == 200:
+            return jsonify(rep.json())
+        return jsonify({"success": False, "players": []})
+    except Exception as e:
+        return jsonify({"success": False, "players": [], "error": str(e)})
 
 # /!\ TRÈS IMPORTANT : Le host est 0.0.0.0 pour l'hébergement web /!\
 # Tout à la fin de bot.py

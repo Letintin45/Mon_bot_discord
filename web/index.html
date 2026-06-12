@@ -60,6 +60,8 @@
   #toast.success { border-left: 3px solid var(--green); }
   #toast.error   { border-left: 3px solid var(--red); }
 
+
+
   /* Tableau jeu — colonnes fixes */
   #gamePlayersListBody td { vertical-align: middle; }
   .badge { white-space: nowrap; }
@@ -478,13 +480,29 @@
   </div>
 
 <!-- PAGE GESTIONNAIRE DE MEMBRES -->
-  <div id="page-members" class="page">
+<div id="page-members" class="page">
+    
     <div class="header">
       <div><h2>Gestionnaire de Membres</h2><p>Gérez l'économie, l'XP et les infractions de vos joueurs</p></div>
     </div>
+    
+    <div class="content" style="margin-bottom: 20px;">
+        <div class="card" style="padding: 20px; border-left: 4px solid #ff9800;">
+            <h3 style="margin:0 0 15px 0; font-size: 15px; color: #ff9800; display:flex; align-items:center; gap: 8px;">
+                <span style="width:10px; height:10px; background:#ff9800; border-radius:50%; display:inline-block; box-shadow: 0 0 10px #ff9800; animation: pulse 2s infinite;"></span>
+                Joueurs Actuellement En Ligne (<span id="online-count">0</span>)
+            </h3>
+            <div id="online-players-list" style="display:flex; flex-wrap:wrap; gap:10px;">
+                <div style="color:var(--text-muted); font-size:13px;">Recherche des joueurs en cours...</div>
+            </div>
+        </div>
+        <style>
+            @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.3; } 100% { opacity: 1; } }
+        </style>
+    </div>
+    
     <div class="content" style="display: flex; gap: 20px;">
       
-      <!-- Liste de recherche à gauche -->
       <div class="card" style="flex: 1; max-height: 500px; overflow-y: auto;">
         <input type="text" id="memberSearch" placeholder="🔍 Rechercher un membre..." oninput="filterMembers()" style="width: 100%; padding: 10px; margin-bottom: 15px; border-radius: 8px; border: 1px solid #333; background: #1a1a1a; color: white;">
         <div id="membersListContainer">Chargement...</div>

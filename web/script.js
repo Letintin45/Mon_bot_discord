@@ -1121,3 +1121,46 @@ async function updateGameAFK() {
         toast(err.message, 'error');
     }
 }
+
+// 🟢 FONCTION POUR AFFICHER LES JOUEURS EN LIGNE
+async function fetchOnlinePlayers() {
+    try {
+        const res = await fetch(`${API}/game/online_players`);
+        const data = await res.json();
+        
+        if (data.success) {
+            const container = document.getElementById('online-players-list');
+            const countSpan = document.getElementById('online-count');
+            
+            countSpan.textContent = data.players.length;
+            
+            if (data.players.length === 0) {
+                container.innerHTML = `<div style="color:var(--text-muted); font-size:13px;">Aucun joueur actif pour le moment.</div>`;
+                return;
+            }
+
+            container.innerHTML = data.players.map(p => {
+                // Choix de la couleur selon la plateforme
+                let platColor = '#8b9bb4'; // Gris par défaut
+                if(p.platform.includes('CrazyGames')) platColor = '#7B1FA2'; // Violet CrazyGames
+                else if(p.platform.includes('Render')) platColor = '#06D6A0'; // Cyan Render
+                else if(p.platform.includes('Itch')) platColor = '#FA5C5C'; // Rouge Itch
+                
+                return `
+                <div style="background: rgba(255,255,255,0.03); border: 1px solid var(--border); padding: 8px 12px; border-radius: 8px; display: flex; align-items: center; gap: 10px;">
+                    <span style="font-weight: bold; color: #fff;">${p.username}</span>
+                    <span style="background: ${platColor}22; color: ${platColor}; border: 1px solid ${platColor}55; padding: 2px 6px; border-radius: 4px; font-size: 11px; font-weight: bold;">
+                        ${p.platform}
+                    </span>
+                </div>
+                `;
+            }).join('');
+        }
+    } catch (err) {
+        console.error("Erreur joueurs en ligne:", err);
+    }
+}
+
+// Lance la mise à jour automatique toutes les 5 secondes
+setInterval(fetchOnlinePlayers, 5000);
+fetchOnlinePlayers(); // Premier appel immédiat au chargement de la page
