@@ -481,12 +481,25 @@
 
 <!-- PAGE GESTIONNAIRE DE MEMBRES -->
 <div id="page-members" class="page">
-    
     <div class="header">
       <div><h2>Gestionnaire de Membres</h2><p>Gérez l'économie, l'XP et les infractions de vos joueurs</p></div>
     </div>
     
-    <div class="content" style="margin-bottom: 20px;">
+    <div class="content" style="margin-bottom: 20px; display: flex; flex-direction: column; gap: 15px;">
+        
+        <div class="card" style="padding: 20px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 15px; border-left: 4px solid #06D6A0;">
+            <div>
+                <h3 style="margin:0; font-size: 15px; color: #06D6A0;">⏱️ Limite AFK Globale (Jeu)</h3>
+                <p style="margin: 5px 0 0 0; font-size: 12px; color: var(--text-muted);">Définit le temps avant que Render ne coupe la connexion d'un inactif.</p>
+            </div>
+            <div style="display: flex; gap: 10px;">
+                <input type="number" id="afk-limit-input" placeholder="Min..." style="background: var(--bg); border: 1px solid var(--border); color: white; padding: 10px 14px; border-radius: 8px; width: 90px; font-family: 'JetBrains Mono', monospace;">
+                <button onclick="updateGameAFK()" class="btn-primary" style="background: #06D6A0; color: #000; font-weight: bold; padding: 10px 20px;">
+                    Appliquer
+                </button>
+            </div>
+        </div>
+
         <div class="card" style="padding: 20px; border-left: 4px solid #ff9800;">
             <h3 style="margin:0 0 15px 0; font-size: 15px; color: #ff9800; display:flex; align-items:center; gap: 8px;">
                 <span style="width:10px; height:10px; background:#ff9800; border-radius:50%; display:inline-block; box-shadow: 0 0 10px #ff9800; animation: pulse 2s infinite;"></span>
@@ -499,8 +512,8 @@
         <style>
             @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.3; } 100% { opacity: 1; } }
         </style>
+        
     </div>
-    
     <div class="content" style="display: flex; gap: 20px;">
       
       <div class="card" style="flex: 1; max-height: 500px; overflow-y: auto;">
