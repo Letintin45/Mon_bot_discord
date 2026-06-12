@@ -7,6 +7,7 @@ from dotenv import load_dotenv
 from flask import Flask, jsonify, request
 import threading
 import hashlib
+import requests
 
 # --- CONFIGURATION DES RÔLES STAFF ---
 ALLOWED_ROLE_IDS = {
@@ -2785,6 +2786,25 @@ def clear_game_message():
         return jsonify({"error": str(e)}), 500
 
 
+@app_flask.route('/api/game/set_afk', methods=['POST'])
+def dashboard_set_afk():
+    data = request.json or {}
+    minutes = data.get("minutes")
+    
+    if not minutes or not isinstance(minutes, int):
+        return jsonify({"error": "Valeur invalide"}), 400
+        
+    try:
+        # Le Dashboard ordonne au serveur du JEU (Render) de changer le temps
+        url_jeu = "https://admin-tycoon.onrender.com/api/admin/set_afk"
+        rep = requests.post(url_jeu, json={"minutes": minutes})
+        
+        if rep.status_code == 200 and rep.json().get("success"):
+            return jsonify({"success": True, "message": f"AFK mis à jour à {minutes} min"})
+        else:
+            return jsonify({"error": "Le jeu a refusé la connexion"}), 500
+    except Exception as e:
+        return jsonify({"error": f"Serveur du jeu injoignable: {e}"}), 500
 
 
 # /!\ TRÈS IMPORTANT : Le host est 0.0.0.0 pour l'hébergement web /!\

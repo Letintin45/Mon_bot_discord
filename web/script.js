@@ -1094,3 +1094,30 @@ async function clearPlayerMessage(username) {
         toast(err.message, 'error');
     }
 }
+
+// 🟢 FONCTION POUR MODIFIER L'AFK DU JEU EN DIRECT
+async function updateGameAFK() {
+    const minutes = parseInt(document.getElementById('afk-limit-input').value);
+    
+    if (!minutes || minutes <= 0) {
+        return toast("Veuillez entrer un nombre de minutes valide.", "error");
+    }
+
+    try {
+        const res = await fetch(`${API}/game/set_afk`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ minutes: minutes })
+        });
+        
+        const data = await res.json();
+        
+        if (data.success) {
+            toast(`⏱️ Limite AFK mondiale passée à ${minutes} min !`);
+        } else {
+            throw new Error(data.error || "Erreur serveur");
+        }
+    } catch (err) {
+        toast(err.message, 'error');
+    }
+}
