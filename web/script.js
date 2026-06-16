@@ -169,6 +169,8 @@ async function populateSelects() {
     document.getElementById('ch_leaderboard').innerHTML = chOpt('live_lb_channel');
     if (currentConfig.lb_sort_by) document.getElementById('lb_sort_by').value = currentConfig.lb_sort_by;
     if (currentConfig.lb_interval) document.getElementById('lb_interval').value = currentConfig.lb_interval;
+    if (currentConfig.traffic_interval) document.getElementById('traffic_interval').value = currentConfig.traffic_interval;
+
 
     document.getElementById('msg_channel').innerHTML = chOpt('');
     document.getElementById('poll_channel').innerHTML = chOpt('');
@@ -326,9 +328,10 @@ async function saveChannels() {
     mod_log_channel:    document.getElementById('ch_modlog').value,
     suggestion_channel: document.getElementById('ch_suggestions').value,
     level_channel:      document.getElementById('ch_levels').value,
-    live_lb_channel:    document.getElementById('ch_leaderboard').value, // <-- LA VIRGULE EST ICI !
+    live_lb_channel:    document.getElementById('ch_leaderboard').value, 
     lb_sort_by:         document.getElementById('lb_sort_by').value,
-    lb_interval:        parseFloat(document.getElementById('lb_interval').value)
+    lb_interval:        parseFloat(document.getElementById('lb_interval').value),
+    traffic_interval:   parseInt(document.getElementById('traffic_interval').value) // 🟢 AJOUT ICI
   };
   
   // 🟢 On envoie le texte brut sans parseInt pour protéger l'ID Discord
@@ -1161,11 +1164,7 @@ async function fetchOnlinePlayers() {
             });
             // -----------------------------------------------------
 
-            // 🟢 AJOUT : MISE À JOUR DU GRAPHIQUE (Gère le temps)
-            if (data.history && trafficChartInstance) {
-                fullTrafficHistory = data.history; // Sauvegarde toutes les données
-                updateChartRange(); // Met à jour avec la durée choisie dans le menu
-            }
+            
 
             if (data.players.length === 0) {
                 container.innerHTML = `<div style="color:var(--text-muted); font-size:13px;">Aucun joueur actif pour le moment.</div>`;
@@ -1249,3 +1248,23 @@ function updateChartRange() {
     trafficChartInstance.data.datasets[3].data = filteredHistory.map(h => h.platforms['Officiel'] || 0);
     trafficChartInstance.update();
 }
+
+
+// 🟢 TÉLÉCHARGEMENT DE L'HISTORIQUE SUPABASE
+async function fetchTrafficHistory() {
+    try {
+        const res = await fetch(`${API}/traffic_history`);
+        const data = await res.json();
+        
+        if (data.success && trafficChartInstance) {
+            fullTrafficHistory = data.history;
+            updateChartRange(); 
+        }
+    } catch (err) {
+        console.error("Erreur historique trafic:", err);
+    }
+}
+
+// On lance le graphique au démarrage, puis on l'actualise seulement toutes les 5 minutes
+setTimeout(fetchTrafficHistory, 1500); 
+setInterval(fetchTrafficHistory, 300000);

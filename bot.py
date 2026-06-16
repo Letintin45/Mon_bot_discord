@@ -11,9 +11,7 @@ import requests
 import time
 from zoneinfo import ZoneInfo
 
-# Variables pour le graphique de trafic
-game_traffic_history = []
-last_traffic_record = 0
+
 
 # --- CONFIGURATION DES RÔLES STAFF ---
 ALLOWED_ROLE_IDS = {
@@ -605,6 +603,41 @@ async def on_ready():
     if not auto_update_leaderboard.is_running():
         auto_update_leaderboard.start()
         print("🏆 Boucle Auto-Leaderboard lancée (1h).")
+    # 🟢 Lancement automatique de l'enregistrement du trafic
+    c = cfg()
+    t_interval = 10 # 10 min par défaut
+    # On cherche la dernière configuration sauvegardée
+    for gid, data in c.items():
+        if 'traffic_interval' in data:
+            t_interval = int(data['traffic_interval'])
+            break
+            
+    if not record_traffic.is_running():
+        record_traffic.start()
+        record_traffic.change_interval(minutes=t_interval)
+        print(f"📈 Boucle d'historique de trafic lancée ({t_interval} min).")
+
+
+@tasks.loop(minutes=10)
+async def record_traffic():
+    try:
+        url_jeu = "https://admin-tycoon-5ksz.onrender.com/api/admin/online_players" # a modif a la fin du mois
+        rep = requests.get(url_jeu, timeout=5)
+        if rep.status_code == 200:
+            data = rep.json()
+            platforms_count = {"CrazyGames": 0, "Kongregate": 0, "Itch.io": 0, "Officiel": 0}
+            for p in data.get("players", []):
+                plat = p.get("platform", "Officiel")
+                if "CrazyGames" in plat: plat = "CrazyGames"
+                elif "Kongregate" in plat: plat = "Kongregate"
+                elif "Itch" in plat: plat = "Itch.io"
+                else: plat = "Officiel"
+                platforms_count[plat] += 1
+                
+            # 🟢 Sauvegarde définitive dans Supabase !
+            supabase.table('traffic_logs').insert({'data': platforms_count}).execute()
+    except Exception as e:
+        print(f"Erreur enregistrement trafic : {e}")
 
 @bot.event
 async def on_invite_create(invite): bot.invites_tracker[invite.guild.id] = await build_invite_snapshot(invite.guild)
@@ -2426,6 +2459,17 @@ def update_config(guild_id):
             auto_update_leaderboard.change_interval(hours=nouvel_interval)
             
     # 🟢 Retourne les données protégées
+
+    # 🟢 NOUVEAUTÉ : Mise à jour de l'horloge du Graphique de Trafic
+    if 'traffic_interval' in patch:
+        n_interval = int(patch['traffic_interval'])
+        if record_traffic.is_running():
+            record_traffic.change_interval(minutes=n_interval)
+        else:
+            record_traffic.start()
+            record_traffic.change_interval(minutes=n_interval)
+            
+    # 🟢 Retourne les données protégées
     return jsonify({'success': True, 'config': sanitize_for_json(c[guild_id])})
 
 @app_flask.route('/api/stats/<guild_id>')
@@ -2808,42 +2852,38 @@ def dashboard_set_afk():
     except Exception as e:
         return jsonify({"error": f"Serveur du jeu injoignable: {e}"}), 500
 
+# Route des joueurs en ligne (Allégée, tourne toutes les 5 secondes)
 @app_flask.route('/api/game/online_players', methods=['GET'])
 def dashboard_online_players():
-    global last_traffic_record, game_traffic_history
     try:
         url_jeu = "https://admin-tycoon-5ksz.onrender.com/api/admin/online_players"
         rep = requests.get(url_jeu, timeout=5)
         if rep.status_code == 200:
-            data = rep.json()
-            
-            # --- 🟢 ENREGISTREMENT HISTORIQUE (Toutes les 2 minutes) ---
-            now = time.time()
-            if now - last_traffic_record >= 120:
-                last_traffic_record = now
-                platforms_count = {}
-                for p in data.get("players", []):
-                    plat = p.get("platform", "Officiel")
-                    if "CrazyGames" in plat: plat = "CrazyGames"
-                    elif "Kongregate" in plat: plat = "Kongregate"
-                    elif "Itch" in plat: plat = "Itch.io"
-                    else: plat = "Officiel"
-                    
-                    platforms_count[plat] = platforms_count.get(plat, 0) + 1
-                    
-                time_str = datetime.now(ZoneInfo("Europe/Paris")).strftime("%H:%M")
-                game_traffic_history.append({"time": time_str, "platforms": platforms_count})
-                
-                # Garde 1440 points maximum (48 heures d'historique en direct)
-                if len(game_traffic_history) > 1440:
-                    game_traffic_history.pop(0)
-            
-            data["history"] = game_traffic_history
-            return jsonify(data)
-            
+            return jsonify(rep.json())
         return jsonify({"success": False, "players": []})
     except Exception as e:
         return jsonify({"success": False, "players": [], "error": str(e)})
+
+# 🟢 NOUVELLE ROUTE : Historique du graphique (Tourne toutes les 5 minutes)
+@app_flask.route('/api/traffic_history', methods=['GET'])
+def get_traffic_history():
+    try:
+        # On récupère les 4320 derniers points (soit 30 jours à 1 point/10min)
+        res = supabase.table('traffic_logs').select('created_at, data').order('created_at', desc=True).limit(4320).execute()
+        
+        data_rows = res.data[::-1]
+        history = []
+        for row in data_rows:
+            dt = datetime.fromisoformat(row['created_at'].replace('Z', '+00:00')).astimezone(ZoneInfo("Europe/Paris"))
+            time_str = dt.strftime("%d/%m %H:%M") 
+            history.append({
+                "time": time_str,
+                "platforms": row['data']
+            })
+            
+        return jsonify({"success": True, "history": history})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
 
 # /!\ TRÈS IMPORTANT : Le host est 0.0.0.0 pour l'hébergement web /!\
 # Tout à la fin de bot.py
