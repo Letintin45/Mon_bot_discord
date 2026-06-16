@@ -936,19 +936,31 @@ async function loadGamePlayers() {
             const tr = document.createElement('tr');
             tr.style.borderBottom = '1px solid #333';
             
-            // 🟢 NOUVELLES DONNÉES (Plateforme & Réponse)
-            const platformHtml = state.platform ? `<br><span style="font-size:0.8em; color:#aaa;">${state.platform}</span>` : '';
-            // 🟢 MODIFIÉ : On intègre une petite croix rouge à droite de la réponse
+            const platformHtml = state.platform ? `<br><span style="font-size:0.8em; color:#aaa; font-weight:normal;">🎮 ${state.platform}</span>` : '';
+            
+            // 🟢 NOUVEAU : On formate la date de première connexion
+            let joinDateHtml = '';
+            if (player.created_at) {
+                const dateObj = new Date(player.created_at);
+                const dateStr = dateObj.toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' });
+                joinDateHtml = `<br><span style="font-size:0.75em; color:var(--text-muted); font-weight:normal;">📅 Inscrit le ${dateStr}</span>`;
+            }
+
             const replyHtml = state.player_reply ? `
                 <br>
                 <div style="margin-top:5px; padding:6px; background:#111; border-left:3px solid #06D6A0; font-size:0.85em; color:#ddd; border-radius:3px; display:flex; justify-content:space-between; align-items:center; gap:10px;">
                     <span>💬 <b>Rép:</b> ${state.player_reply.replace(/</g, "&lt;")}</span>
                     <button class="btn-clear-msg" data-username="${safeUser}" style="background:transparent; border:none; color:#ff4d4d; font-size:1.2em; font-weight:bold; cursor:pointer; padding:0 5px;" title="Supprimer la réponse">&times;</button>
                 </div>` : '';
+
+            // 🟢 ON INTÈGRE LA DATE (joinDateHtml) DANS LE HTML SOUS LA PLATEFORME
             tr.innerHTML = `
                 <td style="padding:10px;font-weight:bold;color:var(--accent)">
                     ${player.username}
+                    <span class="player-online-status" data-username="${safeUser}" style="display: none; background: rgba(6, 214, 160, 0.15); color: #06D6A0; border: 1px solid rgba(6, 214, 160, 0.4); padding: 2px 6px; border-radius: 4px; font-size: 10px; margin-left: 8px; vertical-align: middle; animation: pulse 2s infinite;">🟢 En ligne</span>
+                    
                     ${platformHtml}
+                    ${joinDateHtml}
                 </td>
                 <td style="padding:10px;">Niv ${level} — ${money} €</td>
                 <td style="padding:10px;">
@@ -1134,6 +1146,18 @@ async function fetchOnlinePlayers() {
             
             countSpan.textContent = data.players.length;
             
+            // 🟢 AJOUT : MISE À JOUR DU TABLEAU LEADERBOARD EN DIRECT
+            const onlineUsernames = data.players.map(p => p.username);
+            document.querySelectorAll('.player-online-status').forEach(badge => {
+                // Si le pseudo du tableau est dans la liste des connectés, on l'affiche !
+                if (onlineUsernames.includes(badge.getAttribute('data-username'))) {
+                    badge.style.display = 'inline-block';
+                } else {
+                    badge.style.display = 'none';
+                }
+            });
+            // -----------------------------------------------------
+
             if (data.players.length === 0) {
                 container.innerHTML = `<div style="color:var(--text-muted); font-size:13px;">Aucun joueur actif pour le moment.</div>`;
                 return;
