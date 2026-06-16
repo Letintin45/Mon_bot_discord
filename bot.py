@@ -1283,7 +1283,7 @@ async def profil_jeu(interaction: discord.Interaction, membre: discord.Member = 
         
     except Exception as e:
         print(f"Erreur commande profil-jeu : {e}")
-        await interaction.followup.send("⚠️ Une erreur est survenue lors de la récupération des données.")
+        await interaction.followup.send(f"⚠️ Erreur technique : `{str(e)}`")
 
 @bot.tree.command(name="config-regles", description="Génère l'embed des règles.")
 @app_commands.default_permissions(administrator=True)
