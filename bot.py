@@ -10,6 +10,7 @@ import hashlib
 import requests
 import time
 from zoneinfo import ZoneInfo
+import asyncio
 
 
 
@@ -1173,16 +1174,20 @@ async def sync_roles(interaction: discord.Interaction):
         await interaction.followup.send(f"⚠️ Une erreur technique a empêché la synchronisation : `{e}`")
 
 
-# 🟢 Fonction d'autocomplétion pour chercher les pseudos en direct
+# 🟢 Autocomplétion anti-crash (rend la requête non-bloquante)
 async def pseudo_autocomplete(interaction: discord.Interaction, current: str) -> list[app_commands.Choice[str]]:
     if not supabase_game: return []
     try:
-        # Récupère tous les pseudos du jeu
-        res = supabase_game.table('players').select('username').execute()
+        def fetch_pseudos():
+            return supabase_game.table('players').select('username').execute()
+            
+        res = await asyncio.to_thread(fetch_pseudos)
         pseudos = [p['username'] for p in res.data if p.get('username')]
-        # Filtre selon ce que l'admin tape (limité à 25 choix max par Discord)
-        return [app_commands.Choice(name=p, value=p) for p in pseudos if current.lower() in p.lower()][:25]
-    except:
+        
+        match_pseudos = [p for p in pseudos if current.lower() in p.lower()]
+        return [app_commands.Choice(name=p, value=p) for p in match_pseudos][:25]
+    except Exception as e:
+        print(f"Erreur autocomplete : {e}")
         return []
 
 @bot.tree.command(name="profil-jeu", description="Affiche les statistiques en jeu d'un joueur.")
@@ -1191,14 +1196,14 @@ async def pseudo_autocomplete(interaction: discord.Interaction, current: str) ->
     membre="Le membre Discord (s'il a lié son compte)",
     pseudo_jeu="Le pseudo exact dans le jeu (s'il n'a pas lié son compte)"
 )
-@app_commands.autocomplete(pseudo_jeu=pseudo_autocomplete) # 👈 ON RELIE LA LISTE DÉROULANTE ICI
+@app_commands.autocomplete(pseudo_jeu=pseudo_autocomplete)
 async def profil_jeu(interaction: discord.Interaction, membre: discord.Member = None, pseudo_jeu: str = None):
     await interaction.response.defer()
     
     try:
         player_data = None
         
-        # 1️⃣ Recherche par PSEUDO (Prioritaire)
+        # 1️⃣ Recherche par PSEUDO
         if pseudo_jeu:
             res = supabase_game.table('players').select('username, game_state, created_at, last_login, is_banned, is_excluded, discord_id').eq('username', pseudo_jeu).execute()
             if not res.data:
@@ -1213,7 +1218,6 @@ async def profil_jeu(interaction: discord.Interaction, membre: discord.Member = 
             hashed_uid = hashlib.sha256(texte_a_hacher.encode('utf-8')).hexdigest()
             
             res = supabase_game.table('players').select('username, game_state, created_at, last_login, is_banned, is_excluded, discord_id').eq('discord_id', hashed_uid).execute()
-            
             if not res.data:
                 return await interaction.followup.send("❌ Compte introuvable. Ce joueur n'a pas lié son Discord.")
             player_data = res.data[0]
@@ -1234,7 +1238,6 @@ async def profil_jeu(interaction: discord.Interaction, membre: discord.Member = 
                     is_online = True
         except: pass
 
-        # Temps de jeu et formatage de la connexion
         session_start = state.get('session_start', 0)
         now = datetime.now(timezone.utc).timestamp()
         
@@ -1245,22 +1248,28 @@ async def profil_jeu(interaction: discord.Interaction, membre: discord.Member = 
                 return f"<t:{int(dt.timestamp())}:{fmt}>"
             except: return "Inconnue"
 
+        # 🟢 DATE D'INSCRIPTION : format "f" (Affiche Date ET Heure)
+        created_str = format_discord_time(player_data.get('created_at'), "f")
+        
+        # 🟢 HEURE DE CONNEXION / TEMPS DE JEU
         if is_online:
             login_str = "🟢 **Actuellement en jeu !**"
             minutes_today = int((now - session_start) / 60) if session_start > 0 else 0
             temps_txt = f"{minutes_today} minutes"
             if minutes_today >= 60: temps_txt = f"{minutes_today // 60}h {minutes_today % 60}m"
         else:
-            login_str = format_discord_time(player_data.get('last_login'), "R")
+            login_str = format_discord_time(player_data.get('last_login'), "R") # "Il y a X minutes"
             temps_txt = "💤 Hors ligne" 
             
-        created_str = format_discord_time(player_data.get('created_at'), "D")
-        
         # --- CRÉATION DE L'EMBED ---
         titre = f"👤 Profil : {username}"
         if state.get('is_vip') or state.get('vip'): titre += " 💎"
+        if is_online: titre += " 🟢"
         
-        embed = discord.Embed(title=titre, color=discord.Color.green())
+        # On change la couleur de l'embed selon s'il est en ligne ou pas !
+        color = discord.Color.green() if is_online else discord.Color.light_grey()
+        embed = discord.Embed(title=titre, color=color)
+        
         if not pseudo_jeu and (membre or interaction.user):
             target = membre or interaction.user
             embed.set_thumbnail(url=target.display_avatar.url)
@@ -1268,7 +1277,8 @@ async def profil_jeu(interaction: discord.Interaction, membre: discord.Member = 
         embed.add_field(name="Progression", value=f"⭐ **Niveau {state.get('level', 1)}**\n📈 {state.get('xp', 0)} XP", inline=True)
         embed.add_field(name="Finances", value=f"💰 **{int(state.get('money', 0)):,} €**", inline=True)
         
-        status = "🟢 Actif"
+        # 🟢 STATUT VISUEL CLAIR
+        status = "🟢 En ligne" if is_online else "💤 Hors ligne"
         if player_data.get('is_banned'): status = "🔨 Banni"
         elif player_data.get('is_excluded'): status = "🔴 Exclu du classement"
         embed.add_field(name="Statut", value=status, inline=True)
@@ -1277,13 +1287,15 @@ async def profil_jeu(interaction: discord.Interaction, membre: discord.Member = 
         embed.add_field(name="Temps (Aujourd'hui)", value=f"⏱️ {temps_txt}", inline=True)
         embed.add_field(name="Compte Discord", value="✅ Oui" if player_data.get('discord_id') else "❌ Non", inline=True)
         
-        embed.add_field(name="Création", value=f"📅 {created_str}", inline=True)
+        embed.add_field(name="Création (Heure Locale)", value=f"📅 {created_str}", inline=True)
         embed.add_field(name="Dernière connexion", value=f"🔌 {login_str}", inline=True)
         
         await interaction.followup.send(embed=embed)
         
     except Exception as e:
         await interaction.followup.send(f"⚠️ Erreur technique : `{str(e)}`")
+
+
 @bot.tree.command(name="config-regles", description="Génère l'embed des règles.")
 @app_commands.default_permissions(administrator=True)
 async def setup_rules(interaction: discord.Interaction, salon: discord.TextChannel, role: discord.Role):
@@ -2939,25 +2951,25 @@ def unban_game_player():
 
 @app_flask.route('/api/game_players/message', methods=['POST'])
 def send_game_message():
-    if not supabase_game:
-        return jsonify({"error": "Supabase JEU non configuré"}), 503
     data = request.json or {}
     username = data.get('username', '').strip()
     message = data.get('message', '').strip()
+    
     if not username or not message:
         return jsonify({"error": "Données incomplètes"}), 400
-    try:
-        res = supabase_game.table('players').select('game_state').eq('username', username).execute()
-        if not res.data: return jsonify({"error": "Joueur introuvable"}), 404
-            
-        game_state = res.data[0].get('game_state', {})
-        game_state['admin_message'] = message
-        game_state['player_reply'] = ""
         
-        supabase_game.table('players').update({'game_state': game_state}).eq('username', username).execute()
-        return jsonify({"success": True, "message": f"Message envoyé à {username} !"})
+    try:
+        # 🟢 On envoie le message directement au serveur du jeu !
+        url_jeu = "https://admin-tycoon-5ksz.onrender.com/api/admin/send_message"
+        rep = requests.post(url_jeu, json={"username": username, "message": message}, timeout=5)
+        
+        if rep.status_code == 200 and rep.json().get("success"):
+            return jsonify({"success": True, "message": f"Message envoyé à {username} !"})
+        else:
+            return jsonify({"error": "Le jeu a refusé le message."}), 500
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"error": f"Serveur du jeu injoignable: {e}"}), 500
+    
 
 @app_flask.route('/api/game_players/clear_message', methods=['POST'])
 def clear_game_message():

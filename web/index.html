@@ -454,7 +454,7 @@
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; flex-wrap: wrap; gap: 10px;">
                 <h3 style="margin:0; font-size: 15px; color: #9b5de5;">📈 Historique des connexions</h3>
                 
-                <select id="chartTimeRange" class="time-select" onchange="updateChartRange()">
+                <select id="chartTimeRange" class="time-select" onchange="updateChartRange()" style="background: #111; border: 1px solid #333; color: white; padding: 6px 12px; border-radius: 6px; font-family: 'JetBrains Mono', monospace; font-size: 12px; outline: none; cursor: pointer;">
                     <option value="6">Dernière heure</option>
                     <option value="18">3 dernières heures</option>
                     <option value="36">6 dernières heures</option>
@@ -475,14 +475,13 @@
         </style>
         
     </div>
+    
     <div class="content" style="display: flex; gap: 20px;">
-      
       <div class="card" style="flex: 1; max-height: 500px; overflow-y: auto;">
         <input type="text" id="memberSearch" placeholder="🔍 Rechercher un membre..." oninput="filterMembers()" style="width: 100%; padding: 10px; margin-bottom: 15px; border-radius: 8px; border: 1px solid #333; background: #1a1a1a; color: white;">
         <div id="membersListContainer">Chargement...</div>
       </div>
 
-      <!-- Panneau de contrôle à droite -->
       <div class="card" id="memberDetailsPanel" style="flex: 2; display: none;">
         <div style="display: flex; align-items: center; gap: 15px; border-bottom: 1px solid #333; padding-bottom: 15px; margin-bottom: 15px;">
           <img id="m_avatar" src="" style="width: 64px; height: 64px; border-radius: 50%;">
@@ -513,6 +512,7 @@
         </div>
       </div>
     </div>
+    
     <div class="content" style="margin-top:20px;">
       <div class="card">
         <div class="card-title" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;">
@@ -551,8 +551,7 @@
         </div>
       </div>
     </div>
-  </div>
-
+</div>
 
 </main>
 
