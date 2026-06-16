@@ -940,12 +940,13 @@ async function loadGamePlayers() {
             
             const platformHtml = state.platform ? `<br><span style="font-size:0.8em; color:#aaa; font-weight:normal;">🎮 ${state.platform}</span>` : '';
             
-            // 🟢 NOUVEAU : On formate la date de première connexion
+            // 🟢 NOUVEAU : On formate la date et L'HEURE de première connexion
             let joinDateHtml = '';
             if (player.created_at) {
                 const dateObj = new Date(player.created_at);
                 const dateStr = dateObj.toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' });
-                joinDateHtml = `<br><span style="font-size:0.75em; color:var(--text-muted); font-weight:normal;">📅 Inscrit le ${dateStr}</span>`;
+                const timeStr = dateObj.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+                joinDateHtml = `<br><span style="font-size:0.75em; color:var(--text-muted); font-weight:normal;">📅 Inscrit le ${dateStr} à ${timeStr}</span>`;
             }
 
             const replyHtml = state.player_reply ? `
