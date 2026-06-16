@@ -419,140 +419,70 @@
     <div class="content"><div class="card"><div id="ecoTable">Chargement...</div></div></div>
   </div>
 
-<!-- PAGE GESTIONNAIRE DE MEMBRES -->
-<div id="page-members" class="page">
-    <div class="header">
-      <div><h2>Gestionnaire de Membres</h2><p>Gérez l'économie, l'XP et les infractions de vos joueurs</p></div>
-    </div>
-    
-    <div class="content" style="margin-bottom: 20px; display: flex; flex-direction: column; gap: 15px;">
-        
-        <div class="card" style="padding: 20px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 15px; border-left: 4px solid #06D6A0;">
-            <div>
-                <h3 style="margin:0; font-size: 15px; color: #06D6A0;">⏱️ Limite AFK Globale (Jeu)</h3>
-                <p style="margin: 5px 0 0 0; font-size: 12px; color: var(--text-muted);">Définit le temps avant que Render ne coupe la connexion d'un inactif.</p>
-            </div>
-            <div style="display: flex; gap: 10px;">
-                <input type="number" id="afk-limit-input" placeholder="Min..." style="background: var(--bg); border: 1px solid var(--border); color: white; padding: 10px 14px; border-radius: 8px; width: 90px; font-family: 'JetBrains Mono', monospace;">
-                <button onclick="updateGameAFK()" class="btn-primary" style="background: #06D6A0; color: #000; font-weight: bold; padding: 10px 20px;">
-                    Appliquer
-                </button>
-            </div>
-        </div>
-
-        <div class="card" style="padding: 20px; border-left: 4px solid #ff9800;">
-            <h3 style="margin:0 0 15px 0; font-size: 15px; color: #ff9800; display:flex; align-items:center; gap: 8px;">
-                <span class="pulse-anim"  style="width:10px; height:10px; background:#ff9800; border-radius:50%; display:inline-block; box-shadow: 0 0 10px #ff9800; "></span>
-                Joueurs Actuellement En Ligne (<span id="online-count">0</span>)
-            </h3>
-            <div id="online-players-list" style="display:flex; flex-wrap:wrap; gap:10px;">
-                <div style="color:var(--text-muted); font-size:13px;">Recherche des joueurs en cours...</div>
-            </div>
-        </div>
-
-        <div class="card" style="padding: 20px; border-left: 4px solid #9b5de5; margin-top: 20px;">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; flex-wrap: wrap; gap: 10px;">
-                <h3 style="margin:0; font-size: 15px; color: #9b5de5;">📈 Historique des connexions</h3>
-                
-                <select id="chartTimeRange" class="time-select" onchange="updateChartRange()" style="background: #111; border: 1px solid #333; color: white; padding: 6px 12px; border-radius: 6px; font-family: 'JetBrains Mono', monospace; font-size: 12px; outline: none; cursor: pointer;">
-                    <option value="6">Dernière heure</option>
-                    <option value="18">3 dernières heures</option>
-                    <option value="36">6 dernières heures</option>
-                    <option value="72">12 dernières heures</option>
-                    <option value="144" selected>24 dernières heures</option>
-                    <option value="288">48 dernières heures</option>
-                    <option value="432">3 derniers jours</option>
-                    <option value="1008">7 derniers jours</option>
-                    <option value="4320">30 derniers jours (Max)</option>
-                </select>
-            </div>
-            <div style="position: relative; height: 250px; width: 100%;">
-                <canvas id="trafficChart"></canvas>
-            </div>
-        </div>
-        <style>
-            @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.3; } 100% { opacity: 1; } }
-        </style>
-        
-    </div>
-    
-    <div class="content" style="display: flex; gap: 20px;">
-      <div class="card" style="flex: 1; max-height: 500px; overflow-y: auto;">
-        <input type="text" id="memberSearch" placeholder="🔍 Rechercher un membre..." oninput="filterMembers()" style="width: 100%; padding: 10px; margin-bottom: 15px; border-radius: 8px; border: 1px solid #333; background: #1a1a1a; color: white;">
-        <div id="membersListContainer">Chargement...</div>
-      </div>
-
-      <div class="card" id="memberDetailsPanel" style="flex: 2; display: none;">
-        <div style="display: flex; align-items: center; gap: 15px; border-bottom: 1px solid #333; padding-bottom: 15px; margin-bottom: 15px;">
-          <img id="m_avatar" src="" style="width: 64px; height: 64px; border-radius: 50%;">
-          <div>
-            <h3 id="m_name" style="margin: 0; font-size: 20px;">Nom</h3>
-            <p id="m_id" style="margin: 0; color: #888; font-size: 12px;">ID</p>
-          </div>
-        </div>
-        
-        <div class="form-grid">
-          <div class="form-group"><label>💰 Total Coins</label><div id="m_coins" style="font-size: 18px; font-weight: bold; color: #ffd700;">0 🪙</div></div>
-          <div class="form-group"><label>⭐ XP Total</label><div id="m_xp" style="font-size: 18px; font-weight: bold; color: #00bfff;">0 XP</div></div>
-          <div class="form-group"><label>⚠️ Avertissements</label><div id="m_warns" style="font-size: 18px; font-weight: bold; color: #ff6b6b;">0</div></div>
-        </div>
-
-        <div style="margin-top: 20px; border-top: 1px solid #333; padding-top: 15px;">
-          <label style="display:block; margin-bottom: 10px; font-weight:bold;">Actions Admin</label>
-          <div style="display: flex; gap: 10px; margin-bottom: 10px;">
-            <input type="number" id="m_amount" placeholder="Entrez un montant..." style="flex: 1; padding: 10px; border-radius: 6px; background: #111; border: 1px solid #333; color: white;">
-          </div>
-          <div style="display: flex; gap: 10px; flex-wrap: wrap;">
-            <button class="btn btn-success" onclick="adminAction('add_eco')">➕ Ajouter Coins</button>
-            <button class="btn btn-danger" onclick="adminAction('remove_eco')">➖ Retirer Coins</button>
-            <button class="btn btn-success" onclick="adminAction('add_xp')">➕ Ajouter XP</button>
-            <button class="btn btn-danger" onclick="adminAction('remove_xp')">➖ Retirer XP</button>
-          </div>
-          <button class="btn btn-primary" onclick="adminAction('clear_warns')" style="width: 100%; margin-top: 15px;">🗑️ Purger tous les avertissements</button>
-        </div>
-      </div>
-    </div>
-    
-    <div class="content" style="margin-top:20px;">
-      <div class="card">
+<div class="card">
         <div class="card-title" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;">
           <span><span>🏆</span> Gestion du Leaderboard (Jeu)</span>
-          <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
-             <!-- BARRE DE RECHERCHE -->
-             <input type="text" id="gp-search" placeholder="🔍 Pseudo..." oninput="renderGamePlayersList()" style="background:#111; color:white; border:1px solid #333; padding:5px 10px; border-radius:4px; font-size:12px; width:150px; outline:none;">
-             
-             <!-- TRI (ARGENT / NIVEAU) -->
-             <select id="gp-sort" onchange="renderGamePlayersList()" style="background:#111; color:white; border:1px solid #333; padding:5px; border-radius:4px; font-size:12px; outline:none; cursor:pointer;">
-                 <option value="level">Trier par: Niveau</option>
-                 <option value="money">Trier par: Argent</option>
-             </select>
-
-             <!-- FILTRE PLATEFORME -->
-             <select id="gp-filter-platform" onchange="renderGamePlayersList()" style="background:#111; color:white; border:1px solid #333; padding:5px; border-radius:4px; font-size:12px; outline:none; cursor:pointer;">
-                 <option value="all">Toutes plateformes</option>
-                 <option value="Officiel">Officiel (Render)</option>
-                 <option value="CrazyGames">CrazyGames</option>
-                 <option value="Kongregate">Kongregate</option>
-                 <option value="Itch.io">Itch.io</option>
-                 <option value="Local">Local</option>
-             </select>
-             
-             <label style="font-size:12px; color:var(--text-muted); display:flex; align-items:center; gap:5px; cursor:pointer;">
-                 <input type="checkbox" id="gp-hide-excluded" onchange="renderGamePlayersList()" checked> Cacher exclus
-             </label>
-             <button class="btn btn-primary" onclick="loadGamePlayers()" style="font-size:12px;padding:7px 14px;">🔄 Actualiser</button>
-          </div>
+          <button class="btn btn-primary" onclick="loadGamePlayers()" style="font-size:12px;padding:7px 14px;">
+            🔄 Actualiser
+          </button>
         </div>
         <p style="color:var(--text-muted);font-size:12px;margin-bottom:16px;">Joueurs du jeu via Supabase. Gérez le classement, les bans et envoyez des messages.</p>
+        
         <div style="overflow-x:auto;border-radius:8px;border:1px solid var(--border);">
-          <table style="width:100%;text-align:left;border-collapse:collapse;min-width:680px;">
+          <!-- On élargit un peu la table (min-width: 950px) pour que les filtres respirent bien -->
+          <table style="width:100%;text-align:left;border-collapse:collapse;min-width:950px;">
             <thead>
               <tr style="background:var(--surface2);">
-                <th style="padding:10px 14px;font-size:11px;text-transform:uppercase;letter-spacing:.6px;color:var(--text-muted);border-bottom:1px solid var(--border);">Joueur</th>
-                <th style="padding:10px 14px;font-size:11px;text-transform:uppercase;letter-spacing:.6px;color:var(--text-muted);border-bottom:1px solid var(--border);">Progression</th>
-                <th style="padding:10px 14px;font-size:11px;text-transform:uppercase;letter-spacing:.6px;color:var(--text-muted);border-bottom:1px solid var(--border);">Statut</th>
-                <th style="padding:10px 14px;font-size:11px;text-transform:uppercase;letter-spacing:.6px;color:var(--text-muted);border-bottom:1px solid var(--border);">Classement</th>
-                <th style="padding:10px 14px;font-size:11px;text-transform:uppercase;letter-spacing:.6px;color:var(--text-muted);border-bottom:1px solid var(--border);">Actions</th>
+                
+                <!-- COLONNE 1 : JOUEUR + RECHERCHE -->
+                <th style="padding:8px 14px;font-size:11px;text-transform:uppercase;letter-spacing:.6px;color:var(--text-muted);border-bottom:1px solid var(--border);">
+                  <div style="display:flex; align-items:center; justify-content:space-between; gap:10px;">
+                    <span>Joueur</span>
+                    <input type="text" id="gp-search" placeholder="🔍 Pseudo..." oninput="renderGamePlayersList()" style="background:#111; color:white; border:1px solid #333; padding:4px 8px; border-radius:4px; font-size:10px; width:110px; outline:none; text-transform:none; font-family:'JetBrains Mono', monospace;">
+                  </div>
+                </th>
+                
+                <!-- COLONNE 2 : PROGRESSION + TRI -->
+                <th style="padding:8px 14px;font-size:11px;text-transform:uppercase;letter-spacing:.6px;color:var(--text-muted);border-bottom:1px solid var(--border);">
+                  <div style="display:flex; align-items:center; justify-content:space-between; gap:10px;">
+                    <span>Progression</span>
+                    <select id="gp-sort" onchange="renderGamePlayersList()" style="background:#111; color:white; border:1px solid #333; padding:4px; border-radius:4px; font-size:10px; outline:none; cursor:pointer; text-transform:none; font-family:'JetBrains Mono', monospace;">
+                        <option value="level">Tri: Niveau</option>
+                        <option value="money">Tri: Argent</option>
+                    </select>
+                  </div>
+                </th>
+                
+                <!-- COLONNE 3 : STATUT + PLATEFORME -->
+                <th style="padding:8px 14px;font-size:11px;text-transform:uppercase;letter-spacing:.6px;color:var(--text-muted);border-bottom:1px solid var(--border);">
+                  <div style="display:flex; align-items:center; justify-content:space-between; gap:10px;">
+                    <span>Statut</span>
+                    <select id="gp-filter-platform" onchange="renderGamePlayersList()" style="background:#111; color:white; border:1px solid #333; padding:4px; border-radius:4px; font-size:10px; outline:none; cursor:pointer; text-transform:none; font-family:'JetBrains Mono', monospace;">
+                        <option value="all">Plat: Toutes</option>
+                        <option value="Officiel">Plat: Render</option>
+                        <option value="CrazyGames">Plat: CrazyGames</option>
+                        <option value="Kongregate">Plat: Kongregate</option>
+                        <option value="Itch.io">Plat: Itch.io</option>
+                        <option value="Local">Plat: Local</option>
+                    </select>
+                  </div>
+                </th>
+                
+                <!-- COLONNE 4 : CLASSEMENT + EXCLUS -->
+                <th style="padding:8px 14px;font-size:11px;text-transform:uppercase;letter-spacing:.6px;color:var(--text-muted);border-bottom:1px solid var(--border);">
+                  <div style="display:flex; align-items:center; justify-content:space-between; gap:10px;">
+                    <span>Classement</span>
+                    <label style="font-size:10px; color:var(--text-muted); display:flex; align-items:center; gap:4px; cursor:pointer; text-transform:none; margin:0;">
+                        <input type="checkbox" id="gp-hide-excluded" onchange="renderGamePlayersList()" checked style="margin:0;"> Cacher exclus
+                    </label>
+                  </div>
+                </th>
+                
+                <!-- COLONNE 5 : ACTIONS -->
+                <th style="padding:8px 14px;font-size:11px;text-transform:uppercase;letter-spacing:.6px;color:var(--text-muted);border-bottom:1px solid var(--border);">
+                  Actions
+                </th>
+                
               </tr>
             </thead>
             <tbody id="gamePlayersListBody">
@@ -561,8 +491,6 @@
           </table>
         </div>
       </div>
-    </div>
-</div>
 
 </main>
 
