@@ -516,18 +516,29 @@
     <div class="content" style="margin-top:20px;">
       <div class="card">
         <div class="card-title" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;">
-          <span><span>🏆</span> Gestion des Joueurs (Jeu)</span>
+          <span><span>🏆</span> Gestion du Leaderboard (Jeu)</span>
           <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
-             <select id="gp-filter-platform" onchange="renderGamePlayersList()" style="background:#111; color:white; border:1px solid #333; padding:5px; border-radius:4px; font-size:12px;">
-                 <option value="all">Toutes les plateformes</option>
+             <!-- BARRE DE RECHERCHE -->
+             <input type="text" id="gp-search" placeholder="🔍 Pseudo..." oninput="renderGamePlayersList()" style="background:#111; color:white; border:1px solid #333; padding:5px 10px; border-radius:4px; font-size:12px; width:150px; outline:none;">
+             
+             <!-- TRI (ARGENT / NIVEAU) -->
+             <select id="gp-sort" onchange="renderGamePlayersList()" style="background:#111; color:white; border:1px solid #333; padding:5px; border-radius:4px; font-size:12px; outline:none; cursor:pointer;">
+                 <option value="level">Trier par: Niveau</option>
+                 <option value="money">Trier par: Argent</option>
+             </select>
+
+             <!-- FILTRE PLATEFORME -->
+             <select id="gp-filter-platform" onchange="renderGamePlayersList()" style="background:#111; color:white; border:1px solid #333; padding:5px; border-radius:4px; font-size:12px; outline:none; cursor:pointer;">
+                 <option value="all">Toutes plateformes</option>
                  <option value="Officiel">Officiel (Render)</option>
                  <option value="CrazyGames">CrazyGames</option>
                  <option value="Kongregate">Kongregate</option>
                  <option value="Itch.io">Itch.io</option>
                  <option value="Local">Local</option>
              </select>
+             
              <label style="font-size:12px; color:var(--text-muted); display:flex; align-items:center; gap:5px; cursor:pointer;">
-                 <input type="checkbox" id="gp-hide-excluded" onchange="renderGamePlayersList()" checked> Cacher les exclus
+                 <input type="checkbox" id="gp-hide-excluded" onchange="renderGamePlayersList()" checked> Cacher exclus
              </label>
              <button class="btn btn-primary" onclick="loadGamePlayers()" style="font-size:12px;padding:7px 14px;">🔄 Actualiser</button>
           </div>
@@ -537,11 +548,11 @@
           <table style="width:100%;text-align:left;border-collapse:collapse;min-width:680px;">
             <thead>
               <tr style="background:var(--surface2);">
-                <th style="padding:10px 14px;font-size:11px;text-transform:uppercase;color:var(--text-muted);border-bottom:1px solid var(--border);">Joueur</th>
-                <th style="padding:10px 14px;font-size:11px;text-transform:uppercase;color:var(--text-muted);border-bottom:1px solid var(--border);">Argent</th>
-                <th style="padding:10px 14px;font-size:11px;text-transform:uppercase;color:var(--text-muted);border-bottom:1px solid var(--border);">Niveau</th>
-                <th style="padding:10px 14px;font-size:11px;text-transform:uppercase;color:var(--text-muted);border-bottom:1px solid var(--border);">Statut</th>
-                <th style="padding:10px 14px;font-size:11px;text-transform:uppercase;color:var(--text-muted);border-bottom:1px solid var(--border);">Actions</th>
+                <th style="padding:10px 14px;font-size:11px;text-transform:uppercase;letter-spacing:.6px;color:var(--text-muted);border-bottom:1px solid var(--border);">Joueur</th>
+                <th style="padding:10px 14px;font-size:11px;text-transform:uppercase;letter-spacing:.6px;color:var(--text-muted);border-bottom:1px solid var(--border);">Progression</th>
+                <th style="padding:10px 14px;font-size:11px;text-transform:uppercase;letter-spacing:.6px;color:var(--text-muted);border-bottom:1px solid var(--border);">Statut</th>
+                <th style="padding:10px 14px;font-size:11px;text-transform:uppercase;letter-spacing:.6px;color:var(--text-muted);border-bottom:1px solid var(--border);">Classement</th>
+                <th style="padding:10px 14px;font-size:11px;text-transform:uppercase;letter-spacing:.6px;color:var(--text-muted);border-bottom:1px solid var(--border);">Actions</th>
               </tr>
             </thead>
             <tbody id="gamePlayersListBody">

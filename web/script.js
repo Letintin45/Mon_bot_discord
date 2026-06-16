@@ -916,7 +916,7 @@ async function loadGamePlayers() {
         const res = await fetch(`${API}/game_players`);
         if (!res.ok) throw new Error("Erreur serveur");
         globalGamePlayers = await res.json();
-        renderGamePlayersList(); // Lance le rendu avec filtres
+        renderGamePlayersList(); 
     } catch (err) {
         toast(err.message || 'Erreur de connexion.', 'error');
         tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;color:#ff4757;padding:15px;">❌ ${err.message}</td></tr>`;
@@ -927,19 +927,55 @@ function renderGamePlayersList() {
     const tbody = document.getElementById('gamePlayersListBody');
     if (!tbody) return;
     
+    // Récupération de tous les filtres
     const hideExcluded = document.getElementById('gp-hide-excluded')?.checked;
     const filterPlat = document.getElementById('gp-filter-platform')?.value || 'all';
+    const searchQuery = (document.getElementById('gp-search')?.value || '').toLowerCase().trim();
+    const sortBy = document.getElementById('gp-sort')?.value || 'level';
 
     tbody.innerHTML = '';
     
-    // 1. Appliquer les filtres
-    let filtered = globalGamePlayers.filter(p => {
-        if (hideExcluded && p.is_excluded) return false;
-        
+    // 1. Préparation et parsing de la mémoire des joueurs
+    let processedPlayers = globalGamePlayers.map(p => {
         let state = p.game_state || {};
         if (typeof state === 'string') { try { state = JSON.parse(state); } catch { state = {}; } }
-        let plat = state.platform || "Officiel";
+        p.parsedState = state;
+        return p;
+    });
+
+    // 2. TRI GLOBAL (Pour définir le "vrai" classement avant de filtrer)
+    processedPlayers.sort((a, b) => {
+        if (sortBy === 'money') {
+            const moneyA = Number(a.parsedState.money || 0);
+            const moneyB = Number(b.parsedState.money || 0);
+            if (moneyB !== moneyA) return moneyB - moneyA;
+            return (b.parsedState.level || 1) - (a.parsedState.level || 1);
+        } else {
+            const levelA = Number(a.parsedState.level || 1);
+            const levelB = Number(b.parsedState.level || 1);
+            if (levelB !== levelA) return levelB - levelA;
+            return (b.parsedState.money || 0) - (a.parsedState.money || 0);
+        }
+    });
+
+    // 3. Attribution du numéro de classement (#1, #2...)
+    let currentRank = 1;
+    processedPlayers.forEach(p => {
+        if (hideExcluded && p.is_excluded) {
+            p.rank = "-"; // Les exclus n'ont pas de rang
+        } else {
+            p.rank = currentRank++;
+        }
+    });
+
+    // 4. Filtrage dynamique (Recherche, Plateforme, Exclus)
+    let filtered = processedPlayers.filter(p => {
+        if (hideExcluded && p.is_excluded) return false;
         
+        // Barre de recherche par Pseudo
+        if (searchQuery && !p.username.toLowerCase().includes(searchQuery)) return false;
+
+        let plat = p.parsedState.platform || "Officiel";
         if (filterPlat !== 'all') {
             if (filterPlat === 'Officiel' && !plat.includes('Render') && !plat.includes('Officiel')) return false;
             if (filterPlat === 'CrazyGames' && !plat.includes('CrazyGames')) return false;
@@ -951,23 +987,25 @@ function renderGamePlayersList() {
     });
 
     if (!filtered.length) {
-        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:15px;color:#888;">Aucun joueur trouvé avec ces filtres.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:15px;color:#888;">Aucun joueur trouvé.</td></tr>';
         return;
     }
 
-    // 2. Afficher les résultats
+    // 5. Affichage final
     filtered.forEach(player => {
         const isExcluded = player.is_excluded === true;
         const isBanned   = player.is_banned === true;
-        let state = player.game_state || {};
-        if (typeof state === 'string') { try { state = JSON.parse(state); } catch { state = {}; } }
+        const state      = player.parsedState;
         
         const money = Number(state.money || 0).toLocaleString('fr-FR');
         const level = state.level || 1;
+        const xp    = state.xp || 0;
+        const isVip = state.is_vip || state.vip ? ' <span title="VIP" style="color:var(--yellow); font-size:14px;">💎</span>' : '';
+        
         const safeUser = player.username.replace(/'/g, "\\'");
 
         const exclBtnClass = isExcluded ? 'btn-success' : 'btn-danger';
-        const exclBtnText  = isExcluded ? 'Réintégrer' : 'Exclure (Class.)';
+        const exclBtnText  = isExcluded ? 'Réintégrer' : 'Exclure';
         const banBadge     = isBanned ? '<span class="badge badge-red">🔨 Banni</span>' : '<span class="badge" style="background:rgba(88,101,242,.15);color:var(--accent)">✅ Actif</span>';
         const banBtnClass  = isBanned ? 'btn-success' : 'btn-danger';
         const banBtnText   = isBanned ? '🔓 Débannir' : '🔨 Bannir';
@@ -995,20 +1033,32 @@ function renderGamePlayersList() {
                 <button class="btn-clear-msg" data-username="${safeUser}" style="background:transparent; border:none; color:#ff4d4d; font-size:1.2em; font-weight:bold; cursor:pointer; padding:0 5px;" title="Supprimer la réponse">&times;</button>
             </div>` : '';
 
+        // Définition de la couleur pour le top 3 !
+        let rankColor = '#888';
+        if (player.rank === 1) rankColor = '#ffd700'; // Or
+        if (player.rank === 2) rankColor = '#c0c0c0'; // Argent
+        if (player.rank === 3) rankColor = '#cd7f32'; // Bronze
+
         tr.innerHTML = `
             <td style="padding:10px;font-weight:bold;color:var(--accent)">
-                ${player.username}
+                ${player.username}${isVip}
                 <span class="player-online-status" data-username="${safeUser}" style="display: none; background: rgba(6, 214, 160, 0.15); color: #06D6A0; border: 1px solid rgba(6, 214, 160, 0.4); padding: 2px 6px; border-radius: 4px; font-size: 10px; margin-left: 8px; vertical-align: middle; animation: pulse 2s infinite;">🟢 En ligne</span>
                 ${platformHtml}
                 ${joinDateHtml}
                 ${lastLoginHtml}
             </td>
-            <td style="padding:10px;font-weight:bold;color:var(--green)">${money} €</td>
-            <td style="padding:10px;">Niv ${level}</td>
+            <td style="padding:10px;">
+                <span style="font-weight:bold;color:var(--accent);">Niveau ${level}</span><br>
+                <span style="font-size:0.85em;color:var(--text-muted);">${xp} XP</span><br>
+                <span style="font-weight:bold;color:var(--green);font-size:0.95em;">💰 ${money} €</span>
+            </td>
             <td style="padding:10px;">
                 ${banBadge}
                 ${isExcluded ? '<br><span class="badge badge-red" style="margin-top:4px;display:inline-block;">🔴 Exclu (Class.)</span>' : ''}
                 ${replyHtml}
+            </td>
+            <td style="padding:10px; font-size: 16px; font-weight: bold; color: ${rankColor};">
+                ${player.rank !== "-" ? '#' + player.rank : '-'}
             </td>
             <td style="padding:10px;">
                 <div style="display:flex; gap:5px; flex-wrap:wrap;">
@@ -1020,7 +1070,7 @@ function renderGamePlayersList() {
         tbody.appendChild(tr);
     });
 
-    // Remettre les EventListeners sur les boutons
+    // Remettre les EventListeners
     tbody.querySelectorAll('.btn-excl').forEach(btn => btn.addEventListener('click', () => toggleGameExclusion(btn.dataset.username, btn.dataset.excluded === 'true')));
     tbody.querySelectorAll('.btn-ban').forEach(btn => btn.addEventListener('click', () => {
         if (btn.dataset.banned === 'true') unbanGamePlayer(btn.dataset.username);
