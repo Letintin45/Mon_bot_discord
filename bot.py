@@ -634,8 +634,9 @@ async def record_traffic():
                 else: plat = "Officiel"
                 platforms_count[plat] += 1
                 
-            # 🟢 Sauvegarde définitive dans Supabase !
-            supabase.table('traffic_logs').insert({'data': platforms_count}).execute()
+            # 🟢 Sauvegarde définitive dans Supabase JEU !
+            if supabase_game:
+                supabase_game.table('traffic_logs').insert({'data': platforms_count}).execute()
     except Exception as e:
         print(f"Erreur enregistrement trafic : {e}")
 
@@ -2868,9 +2869,8 @@ def dashboard_online_players():
 @app_flask.route('/api/traffic_history', methods=['GET'])
 def get_traffic_history():
     try:
-        # On récupère les 4320 derniers points (soit 30 jours à 1 point/10min)
-        res = supabase.table('traffic_logs').select('created_at, data').order('created_at', desc=True).limit(4320).execute()
-        
+        # On récupère les 4320 derniers points depuis Supabase JEU
+        res = supabase_game.table('traffic_logs').select('created_at, data').order('created_at', desc=True).limit(4320).execute()       
         data_rows = res.data[::-1]
         history = []
         for row in data_rows:

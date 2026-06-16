@@ -186,6 +186,16 @@
               <option value="24">Une fois par jour (24h)</option>
             </select>
           </div>
+          <div class="form-group">
+            <label>📈 Fréquence d'enregistrement (Graphique)</label>
+            <select id="traffic_interval">
+              <option value="2">Toutes les 2 minutes</option>
+              <option value="5">Toutes les 5 minutes</option>
+              <option value="10" selected>Toutes les 10 minutes</option>
+              <option value="30">Toutes les 30 minutes</option>
+              <option value="60">Toutes les heures</option>
+            </select>
+          </div>
         </div>
       </div>
       
@@ -444,12 +454,14 @@
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; flex-wrap: wrap; gap: 10px;">
                 <h3 style="margin:0; font-size: 15px; color: #9b5de5;">📈 Historique des connexions</h3>
                 
-                <select id="chartTimeRange" onchange="updateChartRange()" style="background: #111; border: 1px solid #333; color: white; padding: 6px 12px; border-radius: 6px; font-family: 'JetBrains Mono', monospace; font-size: 12px; outline: none; cursor: pointer;">
-                    <option value="30">Dernière heure</option>
-                    <option value="90" selected>3 dernières heures</option>
+                <select id="chartTimeRange" class="time-select" onchange="updateChartRange()">
+                    <option value="6">Dernière heure</option>
+                    <option value="18">3 dernières heures</option>
                     <option value="36">6 dernières heures</option>
-                    <option value="360">12 dernières heures</option>
+                    <option value="72">12 dernières heures</option>
                     <option value="144" selected>24 dernières heures</option>
+                    <option value="288">48 dernières heures</option>
+                    <option value="432">3 derniers jours</option>
                     <option value="1008">7 derniers jours</option>
                     <option value="4320">30 derniers jours (Max)</option>
                 </select>
