@@ -2796,7 +2796,7 @@ def dashboard_set_afk():
         
     try:
         # Le Dashboard ordonne au serveur du JEU (Render) de changer le temps
-        url_jeu = "https://admin-tycoon.onrender.com/api/admin/set_afk"
+        url_jeu = "https://admin-tycoon-5ksz.onrender.com/api/admin/set_afk" # A remplacer a la fin du mois 
         rep = requests.post(url_jeu, json={"minutes": minutes})
         
         if rep.status_code == 200 and rep.json().get("success"):
@@ -2809,7 +2809,7 @@ def dashboard_set_afk():
 @app_flask.route('/api/game/online_players', methods=['GET'])
 def dashboard_online_players():
     try:
-        url_jeu = "https://admin-tycoon.onrender.com/api/admin/online_players"
+        url_jeu = "https://admin-tycoon-5ksz.onrender.com/api/admin/online_players" # A remplacer a la fin du mois 
         rep = requests.get(url_jeu, timeout=5)
         if rep.status_code == 200:
             return jsonify(rep.json())

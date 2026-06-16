@@ -1145,6 +1145,7 @@ async function fetchOnlinePlayers() {
                 if(p.platform.includes('CrazyGames')) platColor = '#7B1FA2'; // Violet CrazyGames
                 else if(p.platform.includes('Render')) platColor = '#06D6A0'; // Cyan Render
                 else if(p.platform.includes('Itch')) platColor = '#FA5C5C'; // Rouge Itch
+                else if(p.platform.includes('Kongregate')) platColor = '#e20000'; // 🔴 Rouge Kongregate !
                 
                 return `
                 <div style="background: rgba(255,255,255,0.03); border: 1px solid var(--border); padding: 8px 12px; border-radius: 8px; display: flex; align-items: center; gap: 10px;">
