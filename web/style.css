@@ -90,3 +90,16 @@
   .rr-info { flex: 1; }
   .empty-state { text-align: center; padding: 48px 20px; color: var(--text-muted); }
   .empty-state .empty-icon { font-size: 40px; margin-bottom: 12px; }
+
+
+  /* ========================================== */
+/* 📈 ANIMATIONS ET GRAPHIQUE DE TRAFIC       */
+/* ========================================== */
+@keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.3; } 100% { opacity: 1; } }
+.pulse-anim { animation: pulse 2s infinite; }
+
+.card-graph { border-left: 4px solid #9b5de5; margin-top: 20px; }
+.card-graph-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; flex-wrap: wrap; gap: 10px; }
+.card-graph-title { margin:0; font-size: 15px; color: #9b5de5; }
+.time-select { background: #111; border: 1px solid #333; color: white; padding: 6px 12px; border-radius: 6px; font-family: 'JetBrains Mono', monospace; font-size: 12px; outline: none; cursor: pointer; }
+.chart-container { position: relative; height: 250px; width: 100%; }

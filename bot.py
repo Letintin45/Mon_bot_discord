@@ -8,6 +8,11 @@ from flask import Flask, jsonify, request
 import threading
 import hashlib
 import requests
+import time
+
+# Variables pour le graphique de trafic
+game_traffic_history = []
+last_traffic_record = 0
 
 # --- CONFIGURATION DES RÔLES STAFF ---
 ALLOWED_ROLE_IDS = {
@@ -2804,11 +2809,37 @@ def dashboard_set_afk():
 
 @app_flask.route('/api/game/online_players', methods=['GET'])
 def dashboard_online_players():
+    global last_traffic_record, game_traffic_history
     try:
-        url_jeu = "https://admin-tycoon-5ksz.onrender.com/api/admin/online_players" # A remplacer a la fin du mois 
+        url_jeu = "https://admin-tycoon-5ksz.onrender.com/api/admin/online_players"
         rep = requests.get(url_jeu, timeout=5)
         if rep.status_code == 200:
-            return jsonify(rep.json())
+            data = rep.json()
+            
+            # --- 🟢 ENREGISTREMENT HISTORIQUE (Toutes les 2 minutes) ---
+            now = time.time()
+            if now - last_traffic_record >= 120:
+                last_traffic_record = now
+                platforms_count = {}
+                for p in data.get("players", []):
+                    plat = p.get("platform", "Officiel")
+                    if "CrazyGames" in plat: plat = "CrazyGames"
+                    elif "Kongregate" in plat: plat = "Kongregate"
+                    elif "Itch" in plat: plat = "Itch.io"
+                    else: plat = "Officiel"
+                    
+                    platforms_count[plat] = platforms_count.get(plat, 0) + 1
+                    
+                time_str = datetime.now(timezone.utc).strftime("%H:%M")
+                game_traffic_history.append({"time": time_str, "platforms": platforms_count})
+                
+                # Garde 1440 points maximum (48 heures d'historique en direct)
+                if len(game_traffic_history) > 1440:
+                    game_traffic_history.pop(0)
+            
+            data["history"] = game_traffic_history
+            return jsonify(data)
+            
         return jsonify({"success": False, "players": []})
     except Exception as e:
         return jsonify({"success": False, "players": [], "error": str(e)})

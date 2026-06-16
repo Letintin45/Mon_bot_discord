@@ -7,79 +7,9 @@
 <title>Admin Tycoon — Dashboard</title>
 <link rel="stylesheet" href="style.css">
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
-<style>
-  /* ── Améliorations globales ── */
-  :root { --transition: 0.18s ease; }
-
-  /* Login overlay amélioré */
-  #loginOverlay { background: radial-gradient(ellipse at 50% 0%, rgba(88,101,242,0.12) 0%, var(--bg) 70%); }
-  .login-card {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 16px;
-    padding: 48px 40px;
-    max-width: 420px;
-    width: 90%;
-    text-align: center;
-    box-shadow: 0 24px 64px rgba(0,0,0,0.5), 0 0 0 1px rgba(88,101,242,0.1);
-  }
-  .login-card h2 { font-size: 26px; font-weight: 800; margin-bottom: 8px; }
-  .login-card p { color: var(--text-muted); font-size: 13px; margin-bottom: 28px; line-height: 1.6; }
-  .btn-discord {
-    display: inline-flex; align-items: center; gap: 12px;
-    background: #5865F2; color: #fff;
-    padding: 14px 28px; border-radius: 10px;
-    font-weight: 700; font-size: 15px; text-decoration: none;
-    transition: transform var(--transition), box-shadow var(--transition), background var(--transition);
-    box-shadow: 0 4px 20px rgba(88,101,242,0.4);
-  }
-  .btn-discord:hover { background: #4752c4; transform: translateY(-2px); box-shadow: 0 8px 28px rgba(88,101,242,0.5); }
-  .btn-discord:active { transform: translateY(0); }
-
-  /* Status dot pulsing */
-  .status-dot { animation: none; transition: background var(--transition); }
-  .status-dot:not(.offline) { animation: pulse-green 2.5s infinite; }
-  @keyframes pulse-green {
-    0%, 100% { box-shadow: 0 0 0 0 rgba(87,242,135,0.5); }
-    50% { box-shadow: 0 0 0 5px rgba(87,242,135,0); }
-  }
-
-  /* Nav items */
-  .nav-item { border-radius: 8px; transition: background var(--transition), color var(--transition); }
-  .nav-item .icon { width: 20px; display: inline-block; text-align: center; }
-
-  /* Stats grid responsive */
-  .stats-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 16px; }
-
-  /* Skeleton loader */
-  .skeleton { background: linear-gradient(90deg, var(--surface2) 25%, var(--surface3) 50%, var(--surface2) 75%); background-size: 200% 100%; animation: shimmer 1.4s infinite; border-radius: 8px; }
-  @keyframes shimmer { 0%{background-position:200% 0} 100%{background-position:-200% 0} }
-
-  /* Toast amélioré */
-  #toast { font-family: 'Syne', sans-serif; display:flex; align-items:center; gap:10px; min-width:240px; padding: 14px 20px; border-radius: 10px; box-shadow: 0 8px 32px rgba(0,0,0,0.4); }
-  #toast.success { border-left: 3px solid var(--green); }
-  #toast.error   { border-left: 3px solid var(--red); }
 
 
-
-  /* Tableau jeu — colonnes fixes */
-  #gamePlayersListBody td { vertical-align: middle; }
-  .badge { white-space: nowrap; }
-
-  /* Cards — hover subtil */
-  .card { transition: box-shadow var(--transition); }
-  .card:hover { box-shadow: 0 0 0 1px rgba(88,101,242,0.15); }
-
-  /* Boutons — feedback tactile */
-  .btn { transition: opacity var(--transition), transform var(--transition); }
-  .btn:active { transform: scale(0.97); }
-
-  /* Scrollbar discrète */
-  ::-webkit-scrollbar { width: 5px; height: 5px; }
-  ::-webkit-scrollbar-track { background: transparent; }
-  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
-  ::-webkit-scrollbar-thumb:hover { background: var(--text-dim); }
-</style>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
 
@@ -502,11 +432,28 @@
 
         <div class="card" style="padding: 20px; border-left: 4px solid #ff9800;">
             <h3 style="margin:0 0 15px 0; font-size: 15px; color: #ff9800; display:flex; align-items:center; gap: 8px;">
-                <span style="width:10px; height:10px; background:#ff9800; border-radius:50%; display:inline-block; box-shadow: 0 0 10px #ff9800; animation: pulse 2s infinite;"></span>
+                <span class="pulse-anim"  style="width:10px; height:10px; background:#ff9800; border-radius:50%; display:inline-block; box-shadow: 0 0 10px #ff9800; "></span>
                 Joueurs Actuellement En Ligne (<span id="online-count">0</span>)
             </h3>
             <div id="online-players-list" style="display:flex; flex-wrap:wrap; gap:10px;">
                 <div style="color:var(--text-muted); font-size:13px;">Recherche des joueurs en cours...</div>
+            </div>
+        </div>
+
+        <div class="card" style="padding: 20px; border-left: 4px solid #9b5de5; margin-top: 20px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; flex-wrap: wrap; gap: 10px;">
+                <h3 style="margin:0; font-size: 15px; color: #9b5de5;">📈 Historique des connexions</h3>
+                
+                <select id="chartTimeRange" onchange="updateChartRange()" style="background: #111; border: 1px solid #333; color: white; padding: 6px 12px; border-radius: 6px; font-family: 'JetBrains Mono', monospace; font-size: 12px; outline: none; cursor: pointer;">
+                    <option value="30">Dernière heure</option>
+                    <option value="90" selected>3 dernières heures</option>
+                    <option value="360">12 dernières heures</option>
+                    <option value="720">24 dernières heures</option>
+                    <option value="1440">48 dernières heures (Max)</option>
+                </select>
+            </div>
+            <div style="position: relative; height: 250px; width: 100%;">
+                <canvas id="trafficChart"></canvas>
             </div>
         </div>
         <style>

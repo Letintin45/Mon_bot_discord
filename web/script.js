@@ -879,6 +879,8 @@ document.addEventListener('click', function(e) {
 document.addEventListener('DOMContentLoaded', async () => {
   ['welcomeTitle', 'welcomeMessage', 'welcomeColor', 'welcomeShowInviter'].forEach(id => { document.getElementById(id)?.addEventListener('input', updatePreview); });
   rrPairs = []; renderRRPairs();
+
+  initTrafficChart(); // 🟢 ON LANCE LE GRAPHIQUE AU DÉMARRAGE DE LA PAGE
   
   // Vérifie si un token Discord est présent
   if (localStorage.getItem('discord_token')) {
@@ -1158,6 +1160,12 @@ async function fetchOnlinePlayers() {
             });
             // -----------------------------------------------------
 
+            // 🟢 AJOUT : MISE À JOUR DU GRAPHIQUE (Gère le temps)
+            if (data.history && trafficChartInstance) {
+                fullTrafficHistory = data.history; // Sauvegarde toutes les données
+                updateChartRange(); // Met à jour avec la durée choisie dans le menu
+            }
+
             if (data.players.length === 0) {
                 container.innerHTML = `<div style="color:var(--text-muted); font-size:13px;">Aucun joueur actif pour le moment.</div>`;
                 return;
@@ -1189,3 +1197,54 @@ async function fetchOnlinePlayers() {
 // Lance la mise à jour automatique toutes les 5 secondes
 setInterval(fetchOnlinePlayers, 5000);
 fetchOnlinePlayers(); // Premier appel immédiat au chargement de la page
+
+
+// ============================================================
+// 📈 GRAPHIQUE D'HISTORIQUE DES CONNEXIONS
+// ============================================================
+let trafficChartInstance = null;
+let fullTrafficHistory = [];
+
+function initTrafficChart() {
+    const ctx = document.getElementById('trafficChart');
+    if (!ctx) return;
+    
+    trafficChartInstance = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: [], 
+            datasets: [
+                { label: 'CrazyGames', data: [], borderColor: '#7B1FA2', backgroundColor: '#7B1FA2', tension: 0.3, pointRadius: 2 },
+                { label: 'Kongregate', data: [], borderColor: '#e20000', backgroundColor: '#e20000', tension: 0.3, pointRadius: 2 },
+                { label: 'Itch.io', data: [], borderColor: '#FA5C5C', backgroundColor: '#FA5C5C', tension: 0.3, pointRadius: 2 },
+                { label: 'Officiel', data: [], borderColor: '#06D6A0', backgroundColor: '#06D6A0', tension: 0.3, pointRadius: 2 }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            animation: { duration: 0 }, 
+            plugins: { legend: { labels: { color: '#cce8f4' } } },
+            scales: {
+                x: { ticks: { color: '#7a99bb' }, grid: { color: 'rgba(255,255,255,0.05)' } },
+                y: { ticks: { color: '#7a99bb', stepSize: 1 }, grid: { color: 'rgba(255,255,255,0.05)' }, beginAtZero: true }
+            }
+        }
+    });
+}
+
+function updateChartRange() {
+    if (!trafficChartInstance || fullTrafficHistory.length === 0) return;
+    
+    const rangeSelect = document.getElementById('chartTimeRange');
+    const pointsToKeep = parseInt(rangeSelect.value); 
+    
+    const filteredHistory = fullTrafficHistory.slice(-pointsToKeep);
+    
+    trafficChartInstance.data.labels = filteredHistory.map(h => h.time);
+    trafficChartInstance.data.datasets[0].data = filteredHistory.map(h => h.platforms['CrazyGames'] || 0);
+    trafficChartInstance.data.datasets[1].data = filteredHistory.map(h => h.platforms['Kongregate'] || 0);
+    trafficChartInstance.data.datasets[2].data = filteredHistory.map(h => h.platforms['Itch.io'] || 0);
+    trafficChartInstance.data.datasets[3].data = filteredHistory.map(h => h.platforms['Officiel'] || 0);
+    trafficChartInstance.update();
+}
