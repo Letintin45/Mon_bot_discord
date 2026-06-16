@@ -1172,6 +1172,119 @@ async def sync_roles(interaction: discord.Interaction):
         print(f"❌ Erreur lors de la commande /sync : {e}")
         await interaction.followup.send(f"⚠️ Une erreur technique a empêché la synchronisation : `{e}`")
 
+
+@bot.tree.command(name="profil-jeu", description="Affiche les statistiques en jeu d'un joueur.")
+@app_commands.default_permissions(administrator=True)
+@app_commands.describe(
+    membre="Le membre Discord (s'il a lié son compte)",
+    pseudo_jeu="Le pseudo exact dans le jeu (s'il n'a pas lié son compte)"
+)
+async def profil_jeu(interaction: discord.Interaction, membre: discord.Member = None, pseudo_jeu: str = None):
+    await interaction.response.defer()
+    
+    try:
+        player_data = None
+        
+        # 1️⃣ Recherche par PSEUDO (Prioritaire)
+        if pseudo_jeu:
+            res = supabase_game.table('players').select('username, game_state, created_at, last_login, is_banned, is_excluded, discord_id').eq('username', pseudo_jeu).execute()
+            if not res.data:
+                return await interaction.followup.send(f"❌ Aucun joueur trouvé avec le pseudo **{pseudo_jeu}** dans la base de données.")
+            player_data = res.data[0]
+            
+        # 2️⃣ Recherche par MEMBRE DISCORD
+        else:
+            target_user = membre or interaction.user
+            secret_salt = os.getenv("DISCORD_HASH_SALT")    
+            texte_a_hacher = secret_salt + str(target_user.id)
+            hashed_uid = hashlib.sha256(texte_a_hacher.encode('utf-8')).hexdigest()
+            
+            res = supabase_game.table('players').select('username, game_state, created_at, last_login, is_banned, is_excluded, discord_id').eq('discord_id', hashed_uid).execute()
+            
+            if not res.data:
+                if target_user == interaction.user:
+                    return await interaction.followup.send("❌ Tu n'as pas encore lié ton compte jeu à Discord ! Va sur le jeu et clique sur **🔗 Rôles Discord**.")
+                else:
+                    return await interaction.followup.send(f"❌ {target_user.mention} n'a pas lié son compte jeu à Discord.")
+            player_data = res.data[0]
+
+
+        # --- EXTRACTION DES DONNÉES ---
+        username = player_data.get('username', 'Inconnu')
+        
+        state = player_data.get('game_state', {})
+        if isinstance(state, str):
+            try: state = json.loads(state)
+            except: state = {}
+            
+        level = state.get('level', 1)
+        money = state.get('money', 0)
+        xp = state.get('xp', 0)
+        is_vip = state.get('is_vip', False) or state.get('vip', False)
+        
+        # Temps de jeu
+        session_start = state.get('session_start', 0)
+        now = datetime.now(timezone.utc).timestamp()
+        minutes_today = int((now - session_start) / 60) if session_start > 0 else 0
+        
+        # Infrastructures
+        servers_count = len(state.get('servers', []))
+        sites_count = len(state.get('sites', []))
+        
+        # Formatage des Dates
+        def format_discord_time(iso_date, fmt="f"):
+            if not iso_date: return "Inconnue"
+            try:
+                dt = datetime.fromisoformat(iso_date.replace('Z', '+00:00'))
+                return f"<t:{int(dt.timestamp())}:{fmt}>"
+            except:
+                return "Inconnue"
+                
+        created_str = format_discord_time(player_data.get('created_at'), "D")
+        login_str = format_discord_time(player_data.get('last_login'), "R")
+        
+        # --- CRÉATION DE L'EMBED ---
+        titre = f"👤 Profil Admin Tycoon : {username}"
+        if is_vip: titre += " 💎"
+        
+        embed = discord.Embed(title=titre, color=discord.Color.green())
+        
+        # Avatar (si on utilise la recherche Discord)
+        if not pseudo_jeu and (membre or interaction.user):
+            target = membre or interaction.user
+            embed.set_thumbnail(url=target.display_avatar.url)
+            
+        # Ligne 1 : Progression
+        embed.add_field(name="Progression", value=f"⭐ **Niveau {level}**\n📈 {xp} XP", inline=True)
+        embed.add_field(name="Finances", value=f"💰 **{int(money):,} €**", inline=True)
+        
+        # Ligne 2 : Statut et Liaison
+        status = "🟢 Actif"
+        if player_data.get('is_banned'): status = "🔨 Banni"
+        elif player_data.get('is_excluded'): status = "🔴 Exclu du classement"
+        
+        embed.add_field(name="Statut", value=status, inline=True)
+        
+        embed.add_field(name="Infrastructure", value=f"🖥️ {servers_count} Serveurs\n🌐 {sites_count} Sites", inline=True)
+        
+        temps_txt = f"{minutes_today} minutes"
+        if minutes_today >= 60:
+            temps_txt = f"{minutes_today // 60}h {minutes_today % 60}m"
+        embed.add_field(name="Temps (Aujourd'hui)", value=f"⏱️ {temps_txt}", inline=True)
+        
+        is_linked = "✅ Oui" if player_data.get('discord_id') else "❌ Non"
+        embed.add_field(name="Compte Discord", value=is_linked, inline=True)
+        
+        # Ligne 3 : Dates
+        embed.add_field(name="Création du compte", value=f"📅 {created_str}", inline=True)
+        embed.add_field(name="Dernière connexion", value=f"🔌 {login_str}", inline=True)
+        
+        await interaction.followup.send(embed=embed)
+        
+    except Exception as e:
+        print(f"Erreur commande profil-jeu : {e}")
+        await interaction.followup.send("⚠️ Une erreur est survenue lors de la récupération des données.")
+
 @bot.tree.command(name="config-regles", description="Génère l'embed des règles.")
 @app_commands.default_permissions(administrator=True)
 async def setup_rules(interaction: discord.Interaction, salon: discord.TextChannel, role: discord.Role):
