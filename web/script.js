@@ -1267,4 +1267,4 @@ async function fetchTrafficHistory() {
 
 // On lance le graphique au démarrage, puis on l'actualise seulement toutes les 5 minutes
 setTimeout(fetchTrafficHistory, 1500); 
-setInterval(fetchTrafficHistory, 300000);
+setInterval(fetchTrafficHistory, 60000);

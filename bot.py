@@ -595,6 +595,10 @@ async def on_ready():
     except Exception as e:
         print(f"❌ Erreur de synchro : {e}")
 
+    if not check_admin_replies.is_running():
+        check_admin_replies.start()
+        print("🚨 Boucle de surveillance des messages admin lancée.")
+
     # 👈 Lancement automatique de la boucle de synchronisation des rôles ici
     if not auto_sync_roles.is_running():
         auto_sync_roles.start()
@@ -639,6 +643,37 @@ async def record_traffic():
                 supabase_game.table('traffic_logs').insert({'data': platforms_count}).execute()
     except Exception as e:
         print(f"Erreur enregistrement trafic : {e}")
+
+@tasks.loop(minutes=1)
+async def check_admin_replies():
+    try:
+        if not supabase_game: return
+        
+        # On cherche tous les joueurs
+        res = supabase_game.table('players').select('username, game_state').execute()
+        
+        for user in res.data:
+            gs = user.get('game_state', {})
+            reply = gs.get('player_reply', '')
+            
+            # Si le joueur a écrit une réponse
+            if reply:
+                # 1. On efface la réponse dans la BDD pour ne pas la relire 100 fois
+                gs['player_reply'] = ""
+                supabase_game.table('players').update({'game_state': gs}).eq('username', user['username']).execute()
+                
+                # 2. On t'envoie un message sur ton serveur Discord
+                c = cfg() 
+                for guild_id, data in c.items():
+                    log_ch_id = data.get('log_channel') # Envoie dans le salon de logs configuré
+                    if log_ch_id:
+                        ch = bot.get_channel(int(log_ch_id))
+                        if ch:
+                            embed = discord.Embed(title="🚨 Réponse Support Joueur", description=f"**{user['username']}** a répondu à ton message Admin.", color=discord.Color.orange())
+                            embed.add_field(name="Message :", value=f"*{reply}*", inline=False)
+                            await ch.send(embed=embed)
+    except Exception as e:
+        print(f"Erreur vérification réponses admin : {e}")
 
 @bot.event
 async def on_invite_create(invite): bot.invites_tracker[invite.guild.id] = await build_invite_snapshot(invite.guild)
