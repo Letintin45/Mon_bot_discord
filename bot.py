@@ -9,6 +9,7 @@ import threading
 import hashlib
 import requests
 import time
+from zoneinfo import ZoneInfo
 
 # Variables pour le graphique de trafic
 game_traffic_history = []
@@ -2830,7 +2831,7 @@ def dashboard_online_players():
                     
                     platforms_count[plat] = platforms_count.get(plat, 0) + 1
                     
-                time_str = datetime.now(timezone.utc).strftime("%H:%M")
+                time_str = datetime.now(ZoneInfo("Europe/Paris")).strftime("%H:%M")
                 game_traffic_history.append({"time": time_str, "platforms": platforms_count})
                 
                 # Garde 1440 points maximum (48 heures d'historique en direct)
