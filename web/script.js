@@ -906,109 +906,131 @@ document.addEventListener('DOMContentLoaded', async () => {
 // GESTION DU CLASSEMENT JEU 
 // ==========================================
 
+let globalGamePlayers = [];
+
 async function loadGamePlayers() {
     const tbody = document.getElementById('gamePlayersListBody');
     if (!tbody) return;
     tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:15px;">Chargement...</td></tr>';
     try {
         const res = await fetch(`${API}/game_players`);
-        if (!res.ok) {
-            const err = await res.json().catch(() => ({}));
-            throw new Error(err.error || `Erreur ${res.status}`);
-        }
-        const players = await res.json();
-        if (!players.length) {
-            tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:15px;color:#888;">Aucun joueur trouvé.</td></tr>';
-            return;
-        }
-        tbody.innerHTML = '';
-        players.forEach((player, idx) => {
-            const isExcluded = player.is_excluded === true;
-            const isBanned   = player.is_banned   === true;
-            let state = player.game_state || {};
-            if (typeof state === 'string') { try { state = JSON.parse(state); } catch { state = {}; } }
-            const money = (state.money || 0).toLocaleString('fr-FR');
-            const level = state.level || 1;
-            const safeUser = player.username.replace(/'/g, "\\'");
-
-            const exclBadge    = isExcluded ? '<span class="badge badge-red">🔴 Exclu</span>' : '<span class="badge badge-green">🟢 Visible</span>';
-            const exclBtnClass = isExcluded ? 'btn-success' : 'btn-danger';
-            const exclBtnText  = isExcluded ? 'Réintégrer' : 'Exclure';
-            const banBadge     = isBanned ? '<span class="badge badge-red">🔨 Banni</span>' : '<span class="badge" style="background:rgba(88,101,242,.15);color:var(--accent)">✅ Actif</span>';
-            const banBtnClass  = isBanned ? 'btn-success' : 'btn-danger';
-            const banBtnText   = isBanned ? '🔓 Débannir' : '🔨 Bannir';
-
-            const tr = document.createElement('tr');
-            tr.style.borderBottom = '1px solid #333';
-            
-            const platformHtml = state.platform ? `<br><span style="font-size:0.8em; color:#aaa; font-weight:normal;">🎮 ${state.platform}</span>` : '';
-            
-            // 🟢 NOUVEAU : On formate la date et L'HEURE de première connexion
-            let joinDateHtml = '';
-            if (player.created_at) {
-                const dateObj = new Date(player.created_at);
-                const dateStr = dateObj.toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' });
-                const timeStr = dateObj.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
-                joinDateHtml = `<br><span style="font-size:0.75em; color:var(--text-muted); font-weight:normal;">📅 Inscrit le ${dateStr} à ${timeStr}</span>`;
-            }
-
-            const replyHtml = state.player_reply ? `
-                <br>
-                <div style="margin-top:5px; padding:6px; background:#111; border-left:3px solid #06D6A0; font-size:0.85em; color:#ddd; border-radius:3px; display:flex; justify-content:space-between; align-items:center; gap:10px;">
-                    <span>💬 <b>Rép:</b> ${state.player_reply.replace(/</g, "&lt;")}</span>
-                    <button class="btn-clear-msg" data-username="${safeUser}" style="background:transparent; border:none; color:#ff4d4d; font-size:1.2em; font-weight:bold; cursor:pointer; padding:0 5px;" title="Supprimer la réponse">&times;</button>
-                </div>` : '';
-
-            // 🟢 ON INTÈGRE LA DATE (joinDateHtml) DANS LE HTML SOUS LA PLATEFORME
-            tr.innerHTML = `
-                <td style="padding:10px;font-weight:bold;color:var(--accent)">
-                    ${player.username}
-                    <span class="player-online-status" data-username="${safeUser}" style="display: none; background: rgba(6, 214, 160, 0.15); color: #06D6A0; border: 1px solid rgba(6, 214, 160, 0.4); padding: 2px 6px; border-radius: 4px; font-size: 10px; margin-left: 8px; vertical-align: middle; animation: pulse 2s infinite;">🟢 En ligne</span>
-                    
-                    ${platformHtml}
-                    ${joinDateHtml}
-                </td>
-                <td style="padding:10px;">Niv ${level} — ${money} €</td>
-                <td style="padding:10px;">
-                    ${exclBadge}
-                    ${replyHtml}
-                </td>
-                <td style="padding:10px;">
-                    <button class="btn ${exclBtnClass} btn-excl" data-username="${safeUser}" data-excluded="${isExcluded}"
-                        style="padding:5px 10px;font-size:12px">${exclBtnText}</button>
-                </td>
-                <td style="padding:10px;">
-                    ${banBadge}<br>
-                    <div style="display:flex; gap:5px; margin-top:4px;">
-                        <button class="btn ${banBtnClass} btn-ban" data-username="${safeUser}" data-banned="${isBanned}"
-                            style="padding:5px 10px;font-size:12px">${banBtnText}</button>
-                        <button class="btn btn-primary btn-msg" data-username="${safeUser}" 
-                            style="padding:5px 10px;font-size:12px;background:#ff5722;border:none;cursor:pointer;">💬 Msg</button>
-                    </div>
-                </td>`;
-            tbody.appendChild(tr);
-        });
-
-        tbody.querySelectorAll('.btn-excl').forEach(btn => {
-            btn.addEventListener('click', () => toggleGameExclusion(btn.dataset.username, btn.dataset.excluded === 'true'));
-        });
-        tbody.querySelectorAll('.btn-ban').forEach(btn => {
-            btn.addEventListener('click', () => {
-                if (btn.dataset.banned === 'true') unbanGamePlayer(btn.dataset.username);
-                else banGamePlayer(btn.dataset.username);
-            });
-        });
-        tbody.querySelectorAll('.btn-msg').forEach(btn => {
-            btn.addEventListener('click', () => sendAdminMessage(btn.dataset.username));
-        });
-        tbody.querySelectorAll('.btn-clear-msg').forEach(btn => {
-            btn.addEventListener('click', () => clearPlayerMessage(btn.dataset.username));
-        });
+        if (!res.ok) throw new Error("Erreur serveur");
+        globalGamePlayers = await res.json();
+        renderGamePlayersList(); // Lance le rendu avec filtres
     } catch (err) {
-        console.error('loadGamePlayers:', err);
         toast(err.message || 'Erreur de connexion.', 'error');
         tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;color:#ff4757;padding:15px;">❌ ${err.message}</td></tr>`;
     }
+}
+
+function renderGamePlayersList() {
+    const tbody = document.getElementById('gamePlayersListBody');
+    if (!tbody) return;
+    
+    const hideExcluded = document.getElementById('gp-hide-excluded')?.checked;
+    const filterPlat = document.getElementById('gp-filter-platform')?.value || 'all';
+
+    tbody.innerHTML = '';
+    
+    // 1. Appliquer les filtres
+    let filtered = globalGamePlayers.filter(p => {
+        if (hideExcluded && p.is_excluded) return false;
+        
+        let state = p.game_state || {};
+        if (typeof state === 'string') { try { state = JSON.parse(state); } catch { state = {}; } }
+        let plat = state.platform || "Officiel";
+        
+        if (filterPlat !== 'all') {
+            if (filterPlat === 'Officiel' && !plat.includes('Render') && !plat.includes('Officiel')) return false;
+            if (filterPlat === 'CrazyGames' && !plat.includes('CrazyGames')) return false;
+            if (filterPlat === 'Kongregate' && !plat.includes('Kongregate')) return false;
+            if (filterPlat === 'Itch.io' && !plat.includes('Itch')) return false;
+            if (filterPlat === 'Local' && !plat.includes('Local')) return false;
+        }
+        return true;
+    });
+
+    if (!filtered.length) {
+        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:15px;color:#888;">Aucun joueur trouvé avec ces filtres.</td></tr>';
+        return;
+    }
+
+    // 2. Afficher les résultats
+    filtered.forEach(player => {
+        const isExcluded = player.is_excluded === true;
+        const isBanned   = player.is_banned === true;
+        let state = player.game_state || {};
+        if (typeof state === 'string') { try { state = JSON.parse(state); } catch { state = {}; } }
+        
+        const money = Number(state.money || 0).toLocaleString('fr-FR');
+        const level = state.level || 1;
+        const safeUser = player.username.replace(/'/g, "\\'");
+
+        const exclBtnClass = isExcluded ? 'btn-success' : 'btn-danger';
+        const exclBtnText  = isExcluded ? 'Réintégrer' : 'Exclure (Class.)';
+        const banBadge     = isBanned ? '<span class="badge badge-red">🔨 Banni</span>' : '<span class="badge" style="background:rgba(88,101,242,.15);color:var(--accent)">✅ Actif</span>';
+        const banBtnClass  = isBanned ? 'btn-success' : 'btn-danger';
+        const banBtnText   = isBanned ? '🔓 Débannir' : '🔨 Bannir';
+
+        const tr = document.createElement('tr');
+        tr.style.borderBottom = '1px solid #333';
+        
+        const platformHtml = state.platform ? `<br><span style="font-size:0.8em; color:#aaa; font-weight:normal;">🎮 ${state.platform}</span>` : '';
+        
+        let joinDateHtml = '';
+        if (player.created_at) {
+            const dateObj = new Date(player.created_at);
+            joinDateHtml = `<br><span style="font-size:0.75em; color:var(--text-muted); font-weight:normal;">📅 Inscrit le ${dateObj.toLocaleDateString('fr-FR')}</span>`;
+        }
+
+        let lastLoginHtml = '';
+        if (player.last_login) {
+            const llObj = new Date(player.last_login);
+            lastLoginHtml = `<br><span style="font-size:0.75em; color:var(--cyan); font-weight:bold;">🟢 Vu le ${llObj.toLocaleDateString('fr-FR')} à ${llObj.toLocaleTimeString('fr-FR', {hour:'2-digit', minute:'2-digit'})}</span>`;
+        }
+
+        const replyHtml = state.player_reply ? `
+            <div style="margin-top:5px; padding:6px; background:#111; border-left:3px solid #06D6A0; font-size:0.85em; color:#ddd; border-radius:3px; display:flex; justify-content:space-between; align-items:center; gap:10px;">
+                <span>💬 <b>Rép:</b> ${state.player_reply.replace(/</g, "&lt;")}</span>
+                <button class="btn-clear-msg" data-username="${safeUser}" style="background:transparent; border:none; color:#ff4d4d; font-size:1.2em; font-weight:bold; cursor:pointer; padding:0 5px;" title="Supprimer la réponse">&times;</button>
+            </div>` : '';
+
+        tr.innerHTML = `
+            <td style="padding:10px;font-weight:bold;color:var(--accent)">
+                ${player.username}
+                <span class="player-online-status" data-username="${safeUser}" style="display: none; background: rgba(6, 214, 160, 0.15); color: #06D6A0; border: 1px solid rgba(6, 214, 160, 0.4); padding: 2px 6px; border-radius: 4px; font-size: 10px; margin-left: 8px; vertical-align: middle; animation: pulse 2s infinite;">🟢 En ligne</span>
+                ${platformHtml}
+                ${joinDateHtml}
+                ${lastLoginHtml}
+            </td>
+            <td style="padding:10px;font-weight:bold;color:var(--green)">${money} €</td>
+            <td style="padding:10px;">Niv ${level}</td>
+            <td style="padding:10px;">
+                ${banBadge}
+                ${isExcluded ? '<br><span class="badge badge-red" style="margin-top:4px;display:inline-block;">🔴 Exclu (Class.)</span>' : ''}
+                ${replyHtml}
+            </td>
+            <td style="padding:10px;">
+                <div style="display:flex; gap:5px; flex-wrap:wrap;">
+                    <button class="btn ${banBtnClass} btn-ban" data-username="${safeUser}" data-banned="${isBanned}" style="padding:5px 10px;font-size:12px">${banBtnText}</button>
+                    <button class="btn ${exclBtnClass} btn-excl" data-username="${safeUser}" data-excluded="${isExcluded}" style="padding:5px 10px;font-size:12px">${exclBtnText}</button>
+                    <button class="btn btn-primary btn-msg" data-username="${safeUser}" style="padding:5px 10px;font-size:12px;background:#ff5722;border:none;cursor:pointer;">💬 Msg</button>
+                </div>
+            </td>`;
+        tbody.appendChild(tr);
+    });
+
+    // Remettre les EventListeners sur les boutons
+    tbody.querySelectorAll('.btn-excl').forEach(btn => btn.addEventListener('click', () => toggleGameExclusion(btn.dataset.username, btn.dataset.excluded === 'true')));
+    tbody.querySelectorAll('.btn-ban').forEach(btn => btn.addEventListener('click', () => {
+        if (btn.dataset.banned === 'true') unbanGamePlayer(btn.dataset.username);
+        else banGamePlayer(btn.dataset.username);
+    }));
+    tbody.querySelectorAll('.btn-msg').forEach(btn => btn.addEventListener('click', () => sendAdminMessage(btn.dataset.username)));
+    tbody.querySelectorAll('.btn-clear-msg').forEach(btn => btn.addEventListener('click', () => clearPlayerMessage(btn.dataset.username)));
+    
+    // Forcer la détection des joueurs en ligne
+    fetchOnlinePlayers(); 
 }
 
 async function toggleGameExclusion(username, currentState) {

@@ -1173,12 +1173,25 @@ async def sync_roles(interaction: discord.Interaction):
         await interaction.followup.send(f"⚠️ Une erreur technique a empêché la synchronisation : `{e}`")
 
 
+# 🟢 Fonction d'autocomplétion pour chercher les pseudos en direct
+async def pseudo_autocomplete(interaction: discord.Interaction, current: str) -> list[app_commands.Choice[str]]:
+    if not supabase_game: return []
+    try:
+        # Récupère tous les pseudos du jeu
+        res = supabase_game.table('players').select('username').execute()
+        pseudos = [p['username'] for p in res.data if p.get('username')]
+        # Filtre selon ce que l'admin tape (limité à 25 choix max par Discord)
+        return [app_commands.Choice(name=p, value=p) for p in pseudos if current.lower() in p.lower()][:25]
+    except:
+        return []
+
 @bot.tree.command(name="profil-jeu", description="Affiche les statistiques en jeu d'un joueur.")
 @app_commands.default_permissions(administrator=True)
 @app_commands.describe(
     membre="Le membre Discord (s'il a lié son compte)",
     pseudo_jeu="Le pseudo exact dans le jeu (s'il n'a pas lié son compte)"
 )
+@app_commands.autocomplete(pseudo_jeu=pseudo_autocomplete) # 👈 ON RELIE LA LISTE DÉROULANTE ICI
 async def profil_jeu(interaction: discord.Interaction, membre: discord.Member = None, pseudo_jeu: str = None):
     await interaction.response.defer()
     
@@ -1189,7 +1202,7 @@ async def profil_jeu(interaction: discord.Interaction, membre: discord.Member = 
         if pseudo_jeu:
             res = supabase_game.table('players').select('username, game_state, created_at, last_login, is_banned, is_excluded, discord_id').eq('username', pseudo_jeu).execute()
             if not res.data:
-                return await interaction.followup.send(f"❌ Aucun joueur trouvé avec le pseudo **{pseudo_jeu}** dans la base de données.")
+                return await interaction.followup.send(f"❌ Aucun joueur trouvé avec le pseudo **{pseudo_jeu}**.")
             player_data = res.data[0]
             
         # 2️⃣ Recherche par MEMBRE DISCORD
@@ -1202,89 +1215,75 @@ async def profil_jeu(interaction: discord.Interaction, membre: discord.Member = 
             res = supabase_game.table('players').select('username, game_state, created_at, last_login, is_banned, is_excluded, discord_id').eq('discord_id', hashed_uid).execute()
             
             if not res.data:
-                if target_user == interaction.user:
-                    return await interaction.followup.send("❌ Tu n'as pas encore lié ton compte jeu à Discord ! Va sur le jeu et clique sur **🔗 Rôles Discord**.")
-                else:
-                    return await interaction.followup.send(f"❌ {target_user.mention} n'a pas lié son compte jeu à Discord.")
+                return await interaction.followup.send("❌ Compte introuvable. Ce joueur n'a pas lié son Discord.")
             player_data = res.data[0]
 
-
-        # --- EXTRACTION DES DONNÉES ---
         username = player_data.get('username', 'Inconnu')
-        
         state = player_data.get('game_state', {})
         if isinstance(state, str):
             try: state = json.loads(state)
             except: state = {}
             
-        level = state.get('level', 1)
-        money = state.get('money', 0)
-        xp = state.get('xp', 0)
-        is_vip = state.get('is_vip', False) or state.get('vip', False)
-        
-        # Temps de jeu
+        # 🟢 VÉRIFICATION SI LE JOUEUR EST EN LIGNE
+        is_online = False
+        try:
+            req = requests.get("https://admin-tycoon-5ksz.onrender.com/api/admin/online_players", timeout=3)
+            if req.status_code == 200:
+                online_list = req.json().get('players', [])
+                if any(p.get('username') == username for p in online_list):
+                    is_online = True
+        except: pass
+
+        # Temps de jeu et formatage de la connexion
         session_start = state.get('session_start', 0)
         now = datetime.now(timezone.utc).timestamp()
-        minutes_today = int((now - session_start) / 60) if session_start > 0 else 0
         
-        # Infrastructures
-        servers_count = len(state.get('servers', []))
-        sites_count = len(state.get('sites', []))
-        
-        # Formatage des Dates
         def format_discord_time(iso_date, fmt="f"):
             if not iso_date: return "Inconnue"
             try:
                 dt = datetime.fromisoformat(iso_date.replace('Z', '+00:00'))
                 return f"<t:{int(dt.timestamp())}:{fmt}>"
-            except:
-                return "Inconnue"
-                
+            except: return "Inconnue"
+
+        if is_online:
+            login_str = "🟢 **Actuellement en jeu !**"
+            minutes_today = int((now - session_start) / 60) if session_start > 0 else 0
+            temps_txt = f"{minutes_today} minutes"
+            if minutes_today >= 60: temps_txt = f"{minutes_today // 60}h {minutes_today % 60}m"
+        else:
+            login_str = format_discord_time(player_data.get('last_login'), "R")
+            temps_txt = "💤 Hors ligne" 
+            
         created_str = format_discord_time(player_data.get('created_at'), "D")
-        login_str = format_discord_time(player_data.get('last_login'), "R")
         
         # --- CRÉATION DE L'EMBED ---
-        titre = f"👤 Profil Admin Tycoon : {username}"
-        if is_vip: titre += " 💎"
+        titre = f"👤 Profil : {username}"
+        if state.get('is_vip') or state.get('vip'): titre += " 💎"
         
         embed = discord.Embed(title=titre, color=discord.Color.green())
-        
-        # Avatar (si on utilise la recherche Discord)
         if not pseudo_jeu and (membre or interaction.user):
             target = membre or interaction.user
             embed.set_thumbnail(url=target.display_avatar.url)
             
-        # Ligne 1 : Progression
-        embed.add_field(name="Progression", value=f"⭐ **Niveau {level}**\n📈 {xp} XP", inline=True)
-        embed.add_field(name="Finances", value=f"💰 **{int(money):,} €**", inline=True)
+        embed.add_field(name="Progression", value=f"⭐ **Niveau {state.get('level', 1)}**\n📈 {state.get('xp', 0)} XP", inline=True)
+        embed.add_field(name="Finances", value=f"💰 **{int(state.get('money', 0)):,} €**", inline=True)
         
-        # Ligne 2 : Statut et Liaison
         status = "🟢 Actif"
         if player_data.get('is_banned'): status = "🔨 Banni"
         elif player_data.get('is_excluded'): status = "🔴 Exclu du classement"
-        
         embed.add_field(name="Statut", value=status, inline=True)
         
-        embed.add_field(name="Infrastructure", value=f"🖥️ {servers_count} Serveurs\n🌐 {sites_count} Sites", inline=True)
-        
-        temps_txt = f"{minutes_today} minutes"
-        if minutes_today >= 60:
-            temps_txt = f"{minutes_today // 60}h {minutes_today % 60}m"
+        embed.add_field(name="Infrastructure", value=f"🖥️ {len(state.get('servers', []))} Serveurs\n🌐 {len(state.get('sites', []))} Sites", inline=True)
         embed.add_field(name="Temps (Aujourd'hui)", value=f"⏱️ {temps_txt}", inline=True)
+        embed.add_field(name="Compte Discord", value="✅ Oui" if player_data.get('discord_id') else "❌ Non", inline=True)
         
-        is_linked = "✅ Oui" if player_data.get('discord_id') else "❌ Non"
-        embed.add_field(name="Compte Discord", value=is_linked, inline=True)
-        
-        # Ligne 3 : Dates
-        embed.add_field(name="Création du compte", value=f"📅 {created_str}", inline=True)
+        embed.add_field(name="Création", value=f"📅 {created_str}", inline=True)
         embed.add_field(name="Dernière connexion", value=f"🔌 {login_str}", inline=True)
         
         await interaction.followup.send(embed=embed)
         
     except Exception as e:
-        print(f"Erreur commande profil-jeu : {e}")
         await interaction.followup.send(f"⚠️ Erreur technique : `{str(e)}`")
-
 @bot.tree.command(name="config-regles", description="Génère l'embed des règles.")
 @app_commands.default_permissions(administrator=True)
 async def setup_rules(interaction: discord.Interaction, salon: discord.TextChannel, role: discord.Role):

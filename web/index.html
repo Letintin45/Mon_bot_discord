@@ -516,21 +516,32 @@
     <div class="content" style="margin-top:20px;">
       <div class="card">
         <div class="card-title" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;">
-          <span><span>🏆</span> Gestion du Leaderboard (Jeu)</span>
-          <button class="btn btn-primary" onclick="loadGamePlayers()" style="font-size:12px;padding:7px 14px;">
-            🔄 Actualiser
-          </button>
+          <span><span>🏆</span> Gestion des Joueurs (Jeu)</span>
+          <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+             <select id="gp-filter-platform" onchange="renderGamePlayersList()" style="background:#111; color:white; border:1px solid #333; padding:5px; border-radius:4px; font-size:12px;">
+                 <option value="all">Toutes les plateformes</option>
+                 <option value="Officiel">Officiel (Render)</option>
+                 <option value="CrazyGames">CrazyGames</option>
+                 <option value="Kongregate">Kongregate</option>
+                 <option value="Itch.io">Itch.io</option>
+                 <option value="Local">Local</option>
+             </select>
+             <label style="font-size:12px; color:var(--text-muted); display:flex; align-items:center; gap:5px; cursor:pointer;">
+                 <input type="checkbox" id="gp-hide-excluded" onchange="renderGamePlayersList()" checked> Cacher les exclus
+             </label>
+             <button class="btn btn-primary" onclick="loadGamePlayers()" style="font-size:12px;padding:7px 14px;">🔄 Actualiser</button>
+          </div>
         </div>
         <p style="color:var(--text-muted);font-size:12px;margin-bottom:16px;">Joueurs du jeu via Supabase. Gérez le classement, les bans et envoyez des messages.</p>
         <div style="overflow-x:auto;border-radius:8px;border:1px solid var(--border);">
           <table style="width:100%;text-align:left;border-collapse:collapse;min-width:680px;">
             <thead>
               <tr style="background:var(--surface2);">
-                <th style="padding:10px 14px;font-size:11px;text-transform:uppercase;letter-spacing:.6px;color:var(--text-muted);border-bottom:1px solid var(--border);">Joueur</th>
-                <th style="padding:10px 14px;font-size:11px;text-transform:uppercase;letter-spacing:.6px;color:var(--text-muted);border-bottom:1px solid var(--border);">Progression</th>
-                <th style="padding:10px 14px;font-size:11px;text-transform:uppercase;letter-spacing:.6px;color:var(--text-muted);border-bottom:1px solid var(--border);">Statut</th>
-                <th style="padding:10px 14px;font-size:11px;text-transform:uppercase;letter-spacing:.6px;color:var(--text-muted);border-bottom:1px solid var(--border);">Classement</th>
-                <th style="padding:10px 14px;font-size:11px;text-transform:uppercase;letter-spacing:.6px;color:var(--text-muted);border-bottom:1px solid var(--border);">Actions</th>
+                <th style="padding:10px 14px;font-size:11px;text-transform:uppercase;color:var(--text-muted);border-bottom:1px solid var(--border);">Joueur</th>
+                <th style="padding:10px 14px;font-size:11px;text-transform:uppercase;color:var(--text-muted);border-bottom:1px solid var(--border);">Argent</th>
+                <th style="padding:10px 14px;font-size:11px;text-transform:uppercase;color:var(--text-muted);border-bottom:1px solid var(--border);">Niveau</th>
+                <th style="padding:10px 14px;font-size:11px;text-transform:uppercase;color:var(--text-muted);border-bottom:1px solid var(--border);">Statut</th>
+                <th style="padding:10px 14px;font-size:11px;text-transform:uppercase;color:var(--text-muted);border-bottom:1px solid var(--border);">Actions</th>
               </tr>
             </thead>
             <tbody id="gamePlayersListBody">
