@@ -2268,14 +2268,15 @@ async def aide_autocomplete(interaction: discord.Interaction, current: str) -> l
         choix.insert(0, app_commands.Choice(name="Setup (Admin)", value="⚙️ Setup"))
         choix.insert(1, app_commands.Choice(name="Modération (Staff)", value="🔨 Modération"))
         choix.insert(2, app_commands.Choice(name="Outils Admin (Staff)", value="🛠️ Outils Admin"))
+        choix.insert(3, app_commands.Choice(name="Admin Jeu (Web)", value="🕹️ Admin Jeu")) # 👈 Apparaît uniquement pour le Staff
 
     # Retourne les choix (permet aussi la recherche si l'utilisateur commence à taper des lettres)
     return [c for c in choix if current.lower() in c.name.lower()]
 
 # 🟢 2. LA COMMANDE AIDE PRINCIPALE
 @bot.tree.command(name="aide", description="Affiche les commandes du bot.")
-@app_commands.autocomplete(categorie=aide_autocomplete) # 👈 On relie la commande à la fonction au-dessus !
-async def aide_cmd(interaction: discord.Interaction, categorie: str = None): # 👈 "categorie" est maintenant un texte (str)
+@app_commands.autocomplete(categorie=aide_autocomplete) 
+async def aide_cmd(interaction: discord.Interaction, categorie: str = None): 
     
     is_admin = interaction.user.guild_permissions.administrator or is_staff(interaction.user)
 
@@ -2292,10 +2293,9 @@ async def aide_cmd(interaction: discord.Interaction, categorie: str = None): # �
         "ℹ️ Informations": [("`/rappel-creer`","Créer rappel"),("`/userinfo`","Infos User"),
                             ("`/serverinfo`","Infos Serveur"),("`/avatar`","Avatar"),("`/ping`","Ping")],
                             
-        # 🟢 NOUVEAUTÉ : Rubrique Jeu actualisée
+        # 🟢 Catégorie des Joueurs (Rien de secret ici)
         "🌐 Le Jeu": [("`/sync`","Réclamer ses rôles (Nécessite de lier son compte en jeu)"),
                       ("`/shop`","Acheter le Boost Jeu (+20% de revenus) via la boutique"),
-                      ("🚨 Support Direct", "Les Admins peuvent vous contacter en direct sur votre jeu"),
                       ("☁️ Cloud Save", "Vos parties sont sauvegardées automatiquement en ligne"),
                       ("Lien du jeu", "https://admin-tycoon.onrender.com/")]
     }
@@ -2323,12 +2323,12 @@ async def aide_cmd(interaction: discord.Interaction, categorie: str = None): # �
                             ("/poll","Lancer un Sondage officiel"),
                             ("/note","Ajouter une note de modération"),
                             ("/notes","Voir les notes d'un joueur")],
-        
-        # 🟢 NOUVEAU : Commandes exclusives pour gérer le site web (Protégées)
-        "🕹️ Admin Jeu": [("/alert_joueur","Alerter un joueur en plein jeu"),
-                         ("/alert_clear","Fermer la fenêtre d'alerte d'un joueur"),
-                         ("/set_afk","Modifier le timer AFK global du jeu"),
-                         ("/joueurs_en_ligne","Voir qui est actuellement connecté au jeu")]
+                            
+        # 🟢 Vraies commandes gérant le jeu depuis Discord
+        "🕹️ Admin Jeu": [("/profil-jeu","Affiche le profil complet et les stats d'un joueur en jeu"),
+                         ("/ban-jeu","Bannit un joueur du jeu web (temporairement ou définitivement)"),
+                         ("/unban-jeu","Débannit un joueur du jeu web"),
+                         ("⚠️ Gestion En Direct", "Pour alerter un joueur à l'écran, voir qui est en ligne ou modifier l'AFK, rendez-vous sur le **Dashboard Web** !")]
     }
 
     if is_admin:
@@ -2346,9 +2346,9 @@ async def aide_cmd(interaction: discord.Interaction, categorie: str = None): # �
             for cmd, desc in categories[cat_name]: 
                 embed.add_field(name=cmd, value=desc, inline=True)
             
-        # 🟢 NOUVEAUTÉ : Description enrichie pour le Jeu
+        # Description propre pour les joueurs normaux
         if cat_name == "🌐 Le Jeu":
-            embed.description = "**Admin Tycoon** est notre jeu de gestion de serveurs sur navigateur avec **sauvegarde cloud automatique**.\n\nPour obtenir tes rôles Discord, va sur le jeu, clique sur **🔗 Rôles Discord**, puis reviens ici et tape `/sync`.\n\nUtilise l'argent virtuel de Discord pour acheter le **Boost Jeu** dans le `/shop` !\n\n🚨 **Nouveau :** L'équipe administrative peut désormais t'envoyer des messages d'aide prioritaires directement en jeu !"
+            embed.description = "**Admin Tycoon** est notre jeu de gestion de serveurs sur navigateur avec **sauvegarde cloud automatique**.\n\nPour obtenir tes rôles Discord, va sur le jeu, clique sur **🔗 Rôles Discord**, puis reviens ici et tape `/sync`.\n\nUtilise l'argent virtuel de Discord pour acheter le **Boost Jeu** dans le `/shop` !"
             
     else:
         embed = discord.Embed(title="❓ Menu d'aide", description="Sélectionne une catégorie avec `/aide [catégorie]`.", color=0x5865F2)
