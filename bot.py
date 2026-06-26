@@ -657,11 +657,16 @@ async def check_admin_replies():
             gs = user.get('game_state', {})
             reply = gs.get('player_reply', '')
             
-            # Si le joueur a écrit une réponse
+            # Si le joueur a écrit une réponse (ou fermé la fenêtre)
             if reply:
-                # 1. On efface la réponse dans la BDD pour ne pas la relire 100 fois
-                gs['player_reply'] = ""
-                supabase_game.table('players').update({'game_state': gs}).eq('username', user['username']).execute()
+                # 1. 🚀 LA CORRECTION EST ICI : Au lieu d'effacer juste dans la BDD,
+                # le bot ordonne au jeu (Flask) d'effacer sa mémoire RAM !
+                import requests
+                try:
+                    url_clear = "https://admin-tycoon-5ksz.onrender.com/api/admin/clear_message"
+                    requests.post(url_clear, json={"username": user['username']}, timeout=5)
+                except Exception as e:
+                    print(f"Erreur d'envoi au jeu : {e}")
                 
                 # 2. On t'envoie un message sur ton serveur Discord
                 c = cfg() 
@@ -670,8 +675,12 @@ async def check_admin_replies():
                     if log_ch_id:
                         ch = bot.get_channel(int(log_ch_id))
                         if ch:
-                            embed = discord.Embed(title="🚨 Réponse Support Joueur", description=f"**{user['username']}** a répondu à ton message Admin.", color=discord.Color.orange())
-                            embed.add_field(name="Message :", value=f"*{reply}*", inline=False)
+                            # 3. BONUS : Un message spécifique (gris) si le joueur a juste fermé la fenêtre !
+                            if reply == "[Fermé sans répondre]":
+                                embed = discord.Embed(title="🚪 Notification Joueur", description=f"**{user['username']}** a fermé ton message Admin sans y répondre.", color=discord.Color.light_grey())
+                            else:
+                                embed = discord.Embed(title="🚨 Réponse Support Joueur", description=f"**{user['username']}** a répondu à ton message Admin.", color=discord.Color.orange())
+                                embed.add_field(name="Message :", value=f"*{reply}*", inline=False)
                             await ch.send(embed=embed)
     except Exception as e:
         print(f"Erreur vérification réponses admin : {e}")
